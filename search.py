@@ -1,5 +1,6 @@
 import time
 import random
+import re
 
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
@@ -28,9 +29,13 @@ SEARCH_DELAY = (
     2.5,
 )
 
+EXCLUSIVE_AREAS_URL = (
+    f"{BASE_URL}/legendary_areas?kind=exclusive"
+)
+
 
 # ============================================================
-# MAP ORDER
+# REGULAR MAP ORDER
 # ============================================================
 
 MAPS = [
@@ -53,6 +58,178 @@ MAPS = [
     "Latias Heaven",
     "Ruins of Alph",
 ]
+
+
+# ============================================================
+# DISCOVER EXCLUSIVE MAPS
+# ============================================================
+
+def get_exclusive_maps(driver):
+    """
+    Open the Exclusive Legendary Areas listing and discover
+    which exclusive maps are actually available to this account.
+
+    We intentionally do NOT hard-code the map list.
+
+    The page contains entries like:
+
+        <table class="tnav_border maps-listing">
+            ...
+            <a href="/legendary_areas?area_id=12">
+                Great Volcano
+            </a>
+            ...
+        </table>
+
+    Locked/unavailable areas should not appear as usable map
+    links, so only actual legendary_areas?area_id= links found
+    inside maps-listing tables are returned.
+
+    Returns:
+
+        [
+            {
+                "name": "Great Volcano",
+                "href": "https://eclipserpg.com/legendary_areas?area_id=12"
+            },
+            ...
+        ]
+    """
+
+    print()
+    print(
+        "Checking Exclusive Legendary Areas..."
+    )
+
+    try:
+
+        driver.get(
+            EXCLUSIVE_AREAS_URL
+        )
+
+        wait_for_document_ready(
+            driver
+        )
+
+        time.sleep(1)
+
+    except Exception as e:
+
+        print(
+            "  ✗ Could not open Exclusive "
+            f"Legendary Areas: {e}"
+        )
+
+        return []
+
+    exclusive_maps = []
+
+    seen_urls = set()
+
+    start = time.time()
+
+    while time.time() - start < WAIT_LONG:
+
+        try:
+
+            links = driver.find_elements(
+                By.XPATH,
+                "//table[contains("
+                "@class,'maps-listing'"
+                ")]//a[@href]"
+            )
+
+            for link in links:
+
+                try:
+
+                    if not link.is_displayed():
+                        continue
+
+                    href = link.get_attribute(
+                        "href"
+                    )
+
+                    if not href:
+                        continue
+
+                    # ------------------------------------------------
+                    # Only accept actual legendary area links.
+                    #
+                    # This excludes:
+                    #
+                    # /moon_shop?area=legendary_areas
+                    # /amount_viewer?pokemon=...
+                    # etc.
+                    # ------------------------------------------------
+
+                    if "legendary_areas?area_id=" not in href:
+                        continue
+
+                    name = link.text.strip()
+
+                    if not name:
+                        continue
+
+                    normalized_href = href.lower()
+
+                    if normalized_href in seen_urls:
+                        continue
+
+                    seen_urls.add(
+                        normalized_href
+                    )
+
+                    exclusive_maps.append(
+                        {
+                            "name": name,
+                            "href": href,
+                        }
+                    )
+
+                except StaleElementReferenceException:
+
+                    continue
+
+            # --------------------------------------------------------
+            # Once we've found at least one map, the page has loaded.
+            # --------------------------------------------------------
+
+            if exclusive_maps:
+                break
+
+        except Exception:
+
+            pass
+
+        time.sleep(0.3)
+
+    # ------------------------------------------------------------
+    # Restore original page ordering.
+    # ------------------------------------------------------------
+
+    print()
+
+    if exclusive_maps:
+
+        print(
+            f"✓ Found {len(exclusive_maps)} "
+            "unlocked exclusive map(s)."
+        )
+
+        for area in exclusive_maps:
+
+            print(
+                f"  - {area['name']}"
+            )
+
+    else:
+
+        print(
+            "✓ No exclusive maps are currently unlocked."
+        )
+
+    return exclusive_maps
 
 
 # ============================================================
@@ -264,8 +441,6 @@ def get_search_progress(driver):
             "body"
         ).text
 
-        import re
-
         matches = re.findall(
             r"\b(\d+)\s*/\s*(\d+)\b",
             text
@@ -291,7 +466,7 @@ def get_search_progress(driver):
 
 
 # ============================================================
-# MAP OPENING
+# REGULAR MAP OPENING
 # ============================================================
 
 def open_map(driver, map_name):
@@ -372,6 +547,156 @@ def open_map(driver, map_name):
 
 
 # ============================================================
+# EXCLUSIVE MAP OPENING
+# ============================================================
+
+def open_exclusive_area(
+    driver,
+    area
+):
+
+    map_name = area["name"]
+    href = area["href"]
+
+    print()
+    print(
+        f"Opening exclusive map: {map_name}"
+    )
+
+    print(
+        f"  → {href}"
+    )
+
+    # --------------------------------------------------------
+    # First open the exclusive listing page.
+    #
+    # This is intentional. We don't simply jump directly to
+    # the area URL because you specifically want the bot to
+    # click the map link to load the page.
+    # --------------------------------------------------------
+
+    try:
+
+        driver.get(
+            EXCLUSIVE_AREAS_URL
+        )
+
+        wait_for_document_ready(
+            driver
+        )
+
+        time.sleep(1)
+
+    except Exception as e:
+
+        print(
+            "  ✗ Could not open Exclusive "
+            f"Legendary Areas: {e}"
+        )
+
+        return False
+
+    wanted = normalize(
+        map_name
+    )
+
+    start = time.time()
+
+    while time.time() - start < WAIT_LONG:
+
+        try:
+
+            links = driver.find_elements(
+                By.XPATH,
+                "//table[contains("
+                "@class,'maps-listing'"
+                ")]//a[@href]"
+            )
+
+            for link in links:
+
+                try:
+
+                    text = normalize(
+                        link.text
+                    )
+
+                    if text != wanted:
+                        continue
+
+                    current_href = link.get_attribute(
+                        "href"
+                    )
+
+                    if not current_href:
+                        continue
+
+                    if (
+                        "legendary_areas?area_id="
+                        not in current_href
+                    ):
+                        continue
+
+                    if not (
+                        link.is_displayed()
+                        and link.is_enabled()
+                    ):
+                        continue
+
+                    print(
+                        f"  ✓ {map_name} link found."
+                    )
+
+                    if not safe_click(
+                        driver,
+                        link
+                    ):
+
+                        print(
+                            "  ✗ Could not click "
+                            f"{map_name}."
+                        )
+
+                        return False
+
+                    print(
+                        f"  ✓ {map_name} link clicked."
+                    )
+
+                    wait_for_document_ready(
+                        driver
+                    )
+
+                    time.sleep(1)
+
+                    print(
+                        f"✓ {map_name} loaded."
+                    )
+
+                    return True
+
+                except (
+                    StaleElementReferenceException,
+                    WebDriverException,
+                ):
+
+                    continue
+
+        except Exception:
+
+            pass
+
+        time.sleep(0.3)
+
+    print(
+        f"✗ Could not find exclusive map "
+        f"'{map_name}'."
+    )
+
+    return False
+
+
+# ============================================================
 # HANDLE ENCOUNTER
 # ============================================================
 
@@ -446,9 +771,6 @@ def run_searches(
 
         # ----------------------------------------------------
         # ONLY ONE Search click per iteration.
-        #
-        # IMPORTANT:
-        # Do not call click_search() twice.
         # ----------------------------------------------------
 
         if not click_search(
@@ -492,17 +814,12 @@ def run_searches(
 
                 return False
 
-            # Give the Continue navigation time to finish.
             time.sleep(
                 random.uniform(
                     1.0,
                     1.5
                 )
             )
-
-        # ----------------------------------------------------
-        # Continue to the next search.
-        # ----------------------------------------------------
 
     print()
     print(
@@ -587,6 +904,27 @@ def search_mode(driver):
         "=" * 60
     )
 
+    # ========================================================
+    # Discover exclusive maps FIRST.
+    # ========================================================
+
+    exclusive_maps = get_exclusive_maps(
+        driver
+    )
+
+    # ========================================================
+    # REGULAR MAPS
+    # ========================================================
+
+    print()
+    print(
+        "REGULAR MAPS"
+    )
+
+    print(
+        "-" * 60
+    )
+
     for i, map_name in enumerate(
         MAPS,
         1
@@ -596,10 +934,58 @@ def search_mode(driver):
             f"{i:2}. {map_name}"
         )
 
+    # ========================================================
+    # EXCLUSIVE MAPS
+    # ========================================================
+
+    print()
+    print(
+        "EXCLUSIVE LEGENDARY AREAS"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    if exclusive_maps:
+
+        exclusive_start = (
+            len(MAPS) + 1
+        )
+
+        for i, area in enumerate(
+            exclusive_maps,
+            exclusive_start
+        ):
+
+            print(
+                f"{i:2}. {area['name']}"
+            )
+
+    else:
+
+        print(
+            "No exclusive maps unlocked."
+        )
+
+    # ========================================================
+    # TOTAL AVAILABLE MAPS
+    # ========================================================
+
+    total_maps = (
+        len(MAPS)
+        + len(exclusive_maps)
+    )
+
+    # ========================================================
+    # SELECT MAP
+    # ========================================================
+
     while True:
 
         choice = input(
-            "\nChoose starting map number (1-18): "
+            "\nChoose map number "
+            f"(1-{total_maps}): "
         ).strip()
 
         try:
@@ -608,7 +994,7 @@ def search_mode(driver):
                 choice
             )
 
-            if 1 <= number <= len(MAPS):
+            if 1 <= number <= total_maps:
 
                 break
 
@@ -618,30 +1004,70 @@ def search_mode(driver):
 
         print(
             "✗ Please enter a number from "
-            f"1 to {len(MAPS)}."
+            f"1 to {total_maps}."
         )
 
-    map_index = number - 1
+    # ========================================================
+    # REGULAR MAP
+    # ========================================================
+
+    if number <= len(MAPS):
+
+        map_index = (
+            number - 1
+        )
+
+        is_exclusive = False
+
+        area = None
 
     # ========================================================
-    # IMPORTANT
-    #
-    # We DO NOT automatically advance to the next map.
-    #
-    # The user must explicitly choose another map from the
-    # main menu.
+    # EXCLUSIVE MAP
+    # ========================================================
+
+    else:
+
+        exclusive_index = (
+            number
+            - len(MAPS)
+            - 1
+        )
+
+        is_exclusive = True
+
+        area = exclusive_maps[
+            exclusive_index
+        ]
+
+        map_index = None
+
+    # ========================================================
+    # SEARCH LOOP
     # ========================================================
 
     while True:
 
-        map_name = MAPS[
-            map_index
-        ]
+        if is_exclusive:
 
-        if not open_map(
-            driver,
-            map_name
-        ):
+            map_name = area["name"]
+
+            opened = open_exclusive_area(
+                driver,
+                area
+            )
+
+        else:
+
+            map_name = MAPS[
+                map_index
+            ]
+
+            opened = open_map(
+                driver,
+                map_name
+            )
+
+        if not opened:
 
             print()
             print(
@@ -727,10 +1153,7 @@ def search_mode(driver):
         )
 
         # ----------------------------------------------------
-        # Zero searches:
-        #
-        # Do NOT automatically move to the next map.
-        # Return to the search menu/main menu.
+        # Zero searches.
         # ----------------------------------------------------
 
         if searches == 0:
@@ -748,7 +1171,7 @@ def search_mode(driver):
             return
 
         # ----------------------------------------------------
-        # Run requested searches.
+        # Run searches.
         # ----------------------------------------------------
 
         if not run_searches(
@@ -765,9 +1188,7 @@ def search_mode(driver):
             return
 
         # ----------------------------------------------------
-        # User chooses whether to continue.
-        #
-        # We NEVER automatically move to MAPS[map_index + 1].
+        # Continue / menu.
         # ----------------------------------------------------
 
         action = search_complete_menu(
@@ -778,10 +1199,6 @@ def search_mode(driver):
         if action == "continue":
 
             continue
-
-        # ----------------------------------------------------
-        # Return to main menu.
-        # ----------------------------------------------------
 
         print()
         print(

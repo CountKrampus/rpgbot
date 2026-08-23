@@ -2,160 +2,187 @@ import time
 import random
 
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
 from selenium.common.exceptions import (
-    TimeoutException,
     StaleElementReferenceException,
     WebDriverException,
 )
 
-from utils import safe_click, normalize
+from utils import (
+    safe_click,
+    normalize,
+)
 
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 WAIT_LONG = 20
 
 
 # ============================================================
-# BATTLE BUTTON
+# HELPERS
 # ============================================================
 
-def get_battle_button(driver):
+def wait_for_document_ready(driver, timeout=WAIT_LONG):
 
-    try:
+    start = time.time()
 
-        buttons = driver.find_elements(
-            By.ID,
-            "battlebtn"
-        )
+    while time.time() - start < timeout:
 
-        for button in buttons:
+        try:
+
+            state = driver.execute_script(
+                "return document.readyState"
+            )
+
+            if state in (
+                "interactive",
+                "complete",
+            ):
+                return True
+
+        except Exception:
+            pass
+
+        time.sleep(0.2)
+
+    return False
+
+
+# ============================================================
+# FIND ELEMENT
+# ============================================================
+
+def find_first_visible(
+    driver,
+    selectors,
+    timeout=WAIT_LONG,
+):
+
+    start = time.time()
+
+    while time.time() - start < timeout:
+
+        for by, selector in selectors:
 
             try:
 
-                if button.is_displayed():
+                elements = driver.find_elements(
+                    by,
+                    selector
+                )
 
-                    return button
+                for element in elements:
 
-            except StaleElementReferenceException:
+                    try:
+
+                        if (
+                            element.is_displayed()
+                            and element.is_enabled()
+                        ):
+
+                            return element
+
+                    except StaleElementReferenceException:
+
+                        continue
+
+            except Exception:
 
                 continue
 
-    except Exception:
-
-        pass
+        time.sleep(0.2)
 
     return None
 
 
 # ============================================================
-# ITEM ACTION
+# ITEM
 # ============================================================
 
 def find_item_action(driver):
 
-    """
-    Eclipse RPG capture screen uses:
+    selectors = [
 
-    <div class="battle_link">
-        <span id="B_ItemAction">
-            <a href="javascript: change_action('item');">
-                Item
-            </a>
-        </span>
-    </div>
+        (
+            By.XPATH,
+            "//a[contains(@href,'battle') "
+            "and normalize-space()='Item']"
+        ),
 
-    IMPORTANT:
-    We specifically target B_ItemAction.
+        (
+            By.XPATH,
+            "//input[@value='Item']"
+        ),
 
-    This prevents the bot from accidentally clicking
-    unrelated buttons or advertisements.
-    """
+        (
+            By.XPATH,
+            "//button[normalize-space()='Item']"
+        ),
 
-    try:
+        (
+            By.XPATH,
+            "//*[self::a or self::button or self::input]"
+            "[contains(translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'item')]"
+        ),
 
-        elements = driver.find_elements(
-            By.CSS_SELECTOR,
-            "#B_ItemAction a"
-        )
+    ]
 
-        for element in elements:
-
-            try:
-
-                if (
-                    element.is_displayed()
-                    and element.is_enabled()
-                ):
-
-                    return element
-
-            except StaleElementReferenceException:
-
-                continue
-
-    except Exception:
-
-        pass
-
-    return None
+    return find_first_visible(
+        driver,
+        selectors,
+        timeout=WAIT_LONG,
+    )
 
 
-def click_item_action(driver):
+def click_item(driver):
 
     print(
         "  Looking for Item..."
     )
 
-    start = time.time()
+    item = find_item_action(
+        driver
+    )
 
-    while (
-        time.time() - start
-        < WAIT_LONG
-    ):
+    if not item:
 
-        item = find_item_action(
-            driver
+        print(
+            "  ✗ Item action not found."
         )
 
-        if item is not None:
-
-            try:
-
-                print(
-                    "  ✓ Item action found."
-                )
-
-                if safe_click(
-                    driver,
-                    item
-                ):
-
-                    print(
-                        "  ✓ Item clicked."
-                    )
-
-                    time.sleep(
-                        random.uniform(
-                            0.5,
-                            0.9
-                        )
-                    )
-
-                    return True
-
-            except (
-                StaleElementReferenceException,
-                WebDriverException,
-            ):
-
-                pass
-
-        time.sleep(0.3)
+        return False
 
     print(
-        "  ✗ Item action not found."
+        "  ✓ Item action found."
+    )
+
+    try:
+
+        if safe_click(
+            driver,
+            item
+        ):
+
+            print(
+                "  ✓ Item clicked."
+            )
+
+            return True
+
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
+
+        pass
+
+    print(
+        "  ✗ Could not click Item."
     )
 
     return False
@@ -165,47 +192,110 @@ def click_item_action(driver):
 # BALL SELECTION
 # ============================================================
 
-def get_ball_elements(driver):
+def find_ball(driver):
+
+    selectors = [
+
+        (
+            By.XPATH,
+            "//input[contains("
+            "translate(@value,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'ball')]"
+        ),
+
+        (
+            By.XPATH,
+            "//button[contains("
+            "translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'ball')]"
+        ),
+
+        (
+            By.XPATH,
+            "//a[contains("
+            "translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'ball')]"
+        ),
+
+    ]
+
+    return find_first_visible(
+        driver,
+        selectors,
+        timeout=WAIT_LONG,
+    )
+
+
+def get_available_balls(driver):
+
+    balls = []
 
     try:
 
-        holder = driver.find_element(
-            By.ID,
-            "B_ItemHolder"
-        )
-
-        spans = holder.find_elements(
+        elements = driver.find_elements(
             By.XPATH,
-            "./span[@onclick]"
+            "//*[self::input or self::button or self::a]"
         )
 
-        result = []
-
-        for span in spans:
+        for element in elements:
 
             try:
 
-                if not span.is_displayed():
-
+                if not (
+                    element.is_displayed()
+                    and element.is_enabled()
+                ):
                     continue
 
-                img = span.find_element(
-                    By.TAG_NAME,
-                    "img"
-                )
-
-                name = img.get_attribute(
-                    "alt"
-                )
-
-                if name:
-
-                    result.append(
-                        (
-                            normalize(name),
-                            span
+                text = (
+                    element.text.strip()
+                    or (
+                        element.get_attribute(
+                            "value"
                         )
-                    )
+                        or ""
+                    ).strip()
+                )
+
+                if not text:
+                    continue
+
+                lowered = normalize(
+                    text
+                )
+
+                if (
+                    "pokeball" in lowered
+                    or "great ball" in lowered
+                    or "ultra ball" in lowered
+                    or "premier ball" in lowered
+                    or "luxury ball" in lowered
+                    or "quick ball" in lowered
+                    or "repeat ball" in lowered
+                    or "dusk ball" in lowered
+                    or "timer ball" in lowered
+                    or "net ball" in lowered
+                    or "nest ball" in lowered
+                    or "heal ball" in lowered
+                    or "friend ball" in lowered
+                    or "love ball" in lowered
+                    or "moon ball" in lowered
+                    or "level ball" in lowered
+                    or "lure ball" in lowered
+                    or "heavy ball" in lowered
+                    or "fast ball" in lowered
+                    or "master ball" in lowered
+                ):
+
+                    if text not in balls:
+
+                        balls.append(text)
 
             except (
                 StaleElementReferenceException,
@@ -214,80 +304,252 @@ def get_ball_elements(driver):
 
                 continue
 
-        return result
-
     except Exception:
 
-        return []
+        pass
+
+    return balls
 
 
-def verify_ball_selected(
-    driver,
-    ball_name
-):
+def select_best_ball(driver):
 
-    wanted = normalize(
-        ball_name
+    print(
+        "  Waiting for ball selection..."
     )
 
-    try:
+    start = time.time()
 
-        elements = driver.find_elements(
-            By.ID,
-            "B_CurrentSelection1"
+    while time.time() - start < WAIT_LONG:
+
+        balls = get_available_balls(
+            driver
         )
 
-        for element in elements:
+        if balls:
 
-            try:
+            print(
+                "  Balls available: "
+                + ", ".join(balls)
+            )
 
-                text = normalize(
-                    element.text
-                )
+            # ----------------------------------------------------
+            # Prefer the strongest commonly available ball.
+            # ----------------------------------------------------
 
-                if wanted in text:
+            preferred = [
+                "Ultra Ball",
+                "Great Ball",
+                "Pokeball",
+            ]
 
-                    return True
+            selected = None
 
-                images = element.find_elements(
-                    By.TAG_NAME,
-                    "img"
-                )
+            for wanted in preferred:
 
-                for image in images:
+                for ball in balls:
 
-                    alt = normalize(
-                        image.get_attribute(
-                            "alt"
-                        )
-                    )
-
-                    title = normalize(
-                        image.get_attribute(
-                            "title"
-                        )
-                    )
-
-                    src = normalize(
-                        image.get_attribute(
-                            "src"
-                        )
-                    )
-
-                    if (
-                        wanted == alt
-                        or wanted == title
-                        or wanted.replace(
-                            " ",
-                            "_"
-                        ) in src
+                    if normalize(ball) == normalize(
+                        wanted
                     ):
+
+                        selected = ball
+                        break
+
+                if selected:
+                    break
+
+            if not selected:
+
+                selected = balls[0]
+
+            print(
+                f"  Selecting {selected}..."
+            )
+
+            elements = driver.find_elements(
+                By.XPATH,
+                "//*[self::input or self::button or self::a]"
+            )
+
+            for element in elements:
+
+                try:
+
+                    if not (
+                        element.is_displayed()
+                        and element.is_enabled()
+                    ):
+                        continue
+
+                    text = (
+                        element.text.strip()
+                        or (
+                            element.get_attribute(
+                                "value"
+                            )
+                            or ""
+                        ).strip()
+                    )
+
+                    if normalize(text) != normalize(
+                        selected
+                    ):
+                        continue
+
+                    if safe_click(
+                        driver,
+                        element
+                    ):
+
+                        print(
+                            f"  ✓ {selected} clicked."
+                        )
 
                         return True
 
-            except Exception:
+                except (
+                    StaleElementReferenceException,
+                    WebDriverException,
+                ):
 
-                continue
+                    continue
+
+        time.sleep(0.3)
+
+    print(
+        "  ✗ No usable Poké Ball found."
+    )
+
+    return False
+
+
+# ============================================================
+# ATTACK
+# ============================================================
+
+def find_attack_button(driver):
+
+    selectors = [
+
+        (
+            By.XPATH,
+            "//input[@value='Attack']"
+        ),
+
+        (
+            By.XPATH,
+            "//button[normalize-space()='Attack']"
+        ),
+
+        (
+            By.XPATH,
+            "//a[normalize-space()='Attack']"
+        ),
+
+        (
+            By.XPATH,
+            "//*[self::input or self::button or self::a]"
+            "[contains(translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'attack')]"
+        ),
+
+    ]
+
+    return find_first_visible(
+        driver,
+        selectors,
+        timeout=WAIT_LONG,
+    )
+
+
+def click_attack(driver):
+
+    print(
+        "  Waiting for Attack/Fight..."
+    )
+
+    button = find_attack_button(
+        driver
+    )
+
+    if not button:
+
+        print(
+            "  ✗ Attack button not found."
+        )
+
+        return False
+
+    try:
+
+        text = (
+            button.text.strip()
+            or (
+                button.get_attribute(
+                    "value"
+                )
+                or ""
+            ).strip()
+        )
+
+        print(
+            f"  Battle button: '{text}'"
+        )
+
+        if safe_click(
+            driver,
+            button
+        ):
+
+            print(
+                f"  ✓ '{normalize(text)}' clicked."
+            )
+
+            return True
+
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
+
+        pass
+
+    return False
+
+
+# ============================================================
+# CAPTURE RESULT
+# ============================================================
+
+def capture_succeeded(driver):
+
+    try:
+
+        body = driver.find_element(
+            By.TAG_NAME,
+            "body"
+        )
+
+        text = normalize(
+            body.text
+        )
+
+        success_phrases = [
+            "was caught",
+            "was captured",
+            "you have obtained",
+            "pokemon obtained",
+            "has been sent to your box",
+            "has been registered",
+        ]
+
+        for phrase in success_phrases:
+
+            if phrase in text:
+
+                return True
 
     except Exception:
 
@@ -296,183 +558,35 @@ def verify_ball_selected(
     return False
 
 
-def select_ball(
-    driver,
-    preferred=(
-        "Ultra Ball",
-        "Great Ball",
-        "PokeBall",
-    )
-):
+def capture_failed(driver):
 
-    print(
-        "  Waiting for ball selection..."
-    )
+    try:
 
-    start = time.time()
-
-    while (
-        time.time() - start
-        < WAIT_LONG
-    ):
-
-        balls = get_ball_elements(
-            driver
+        body = driver.find_element(
+            By.TAG_NAME,
+            "body"
         )
 
-        if balls:
-
-            print(
-                "  Balls available: "
-                + ", ".join(
-                    name.title()
-                    for name, _ in balls
-                )
-            )
-
-            for wanted in preferred:
-
-                wanted_normal = normalize(
-                    wanted
-                )
-
-                for name, element in balls:
-
-                    if name != wanted_normal:
-
-                        continue
-
-                    print(
-                        f"  Selecting {wanted}..."
-                    )
-
-                    try:
-
-                        if safe_click(
-                            driver,
-                            element
-                        ):
-
-                            print(
-                                f"  ✓ {wanted} clicked."
-                            )
-
-                            time.sleep(
-                                random.uniform(
-                                    0.4,
-                                    0.7
-                                )
-                            )
-
-                            if verify_ball_selected(
-                                driver,
-                                wanted
-                            ):
-
-                                print(
-                                    f"  ✓ {wanted} confirmed."
-                                )
-
-                                return True
-
-                            # Some versions of the site don't
-                            # update B_CurrentSelection1 reliably.
-                            #
-                            # If the element was successfully
-                            # clicked, allow the capture flow
-                            # to continue.
-
-                            print(
-                                f"  ⚠ {wanted} selection "
-                                "could not be visually confirmed."
-                            )
-
-                            return True
-
-                    except (
-                        StaleElementReferenceException,
-                        WebDriverException,
-                    ):
-
-                        continue
-
-            print(
-                "  ✗ Preferred balls were not available."
-            )
-
-            return False
-
-        time.sleep(0.3)
-
-    print(
-        "  ✗ Ball holder never appeared."
-    )
-
-    return False
-
-
-# ============================================================
-# ATTACK BUTTON
-# ============================================================
-
-def click_capture_attack(driver):
-
-    print(
-        "  Waiting for Attack/Fight..."
-    )
-
-    start = time.time()
-
-    while (
-        time.time() - start
-        < WAIT_LONG
-    ):
-
-        button = get_battle_button(
-            driver
+        text = normalize(
+            body.text
         )
 
-        if button is not None:
+        failure_phrases = [
+            "use another",
+            "capture failed",
+            "broke free",
+            "escaped",
+        ]
 
-            try:
+        for phrase in failure_phrases:
 
-                state = normalize(
-                    button.text
-                )
+            if phrase in text:
 
-                if state in (
-                    "attack",
-                    "fight",
-                ):
+                return True
 
-                    print(
-                        f"  Battle button: "
-                        f"'{button.text.strip()}'"
-                    )
+    except Exception:
 
-                    if safe_click(
-                        driver,
-                        button
-                    ):
-
-                        print(
-                            f"  ✓ '{state}' clicked."
-                        )
-
-                        return True
-
-            except (
-                StaleElementReferenceException,
-                WebDriverException,
-            ):
-
-                pass
-
-        time.sleep(0.3)
-
-    print(
-        "  ✗ Attack/Fight button not found."
-    )
+        pass
 
     return False
 
@@ -483,56 +597,33 @@ def click_capture_attack(driver):
 
 def find_use_another(driver):
 
-    """
-    Eclipse RPG capture failure uses:
+    selectors = [
 
-    <button
-        onclick="document.getElementById('B_Action').value = 'Item';
-        return create_attack(this, event.pageX, event.pageY, event);"
-        class="forward">
-
-        Use Another (95 left)
-
-    </button>
-
-    We deliberately search for a BUTTON whose visible text
-    contains "Use Another".
-
-    This avoids generic links/buttons and advertisements.
-    """
-
-    try:
-
-        buttons = driver.find_elements(
+        (
             By.XPATH,
-            "//button[contains("
-            "translate(normalize-space(.),"
+            "//*[self::a or self::button or self::input]"
+            "[contains(translate(normalize-space(.),"
             "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
             "'abcdefghijklmnopqrstuvwxyz'),"
-            "'use another'"
-            ")]"
-        )
+            "'use another')]"
+        ),
 
-        for button in buttons:
+        (
+            By.XPATH,
+            "//*[self::a or self::button or self::input]"
+            "[contains(translate(@value,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'use another')]"
+        ),
 
-            try:
+    ]
 
-                if (
-                    button.is_displayed()
-                    and button.is_enabled()
-                ):
-
-                    return button
-
-            except StaleElementReferenceException:
-
-                continue
-
-    except Exception:
-
-        pass
-
-    return None
+    return find_first_visible(
+        driver,
+        selectors,
+        timeout=5,
+    )
 
 
 def click_use_another(driver):
@@ -541,56 +632,58 @@ def click_use_another(driver):
         "  Looking for Use Another..."
     )
 
-    start = time.time()
+    button = find_use_another(
+        driver
+    )
 
-    while (
-        time.time() - start
-        < WAIT_LONG
-    ):
+    if not button:
 
-        button = find_use_another(
-            driver
+        print(
+            "  ✗ Use Another not found."
         )
 
-        if button is not None:
+        return False
 
-            try:
+    try:
 
-                print(
-                    f"  ✓ Use Another found: "
-                    f"'{button.text.strip()}'"
+        text = (
+            button.text.strip()
+            or (
+                button.get_attribute(
+                    "value"
                 )
+                or ""
+            ).strip()
+        )
 
-                if safe_click(
-                    driver,
-                    button
-                ):
+        print(
+            f"  ✓ Use Another found: '{text}'"
+        )
 
-                    print(
-                        "  ✓ Use Another clicked."
-                    )
+        if safe_click(
+            driver,
+            button
+        ):
 
-                    time.sleep(
-                        random.uniform(
-                            0.7,
-                            1.2
-                        )
-                    )
+            print(
+                "  ✓ Use Another clicked."
+            )
 
-                    return True
+            time.sleep(
+                random.uniform(
+                    0.5,
+                    1.0
+                )
+            )
 
-            except (
-                StaleElementReferenceException,
-                WebDriverException,
-            ):
+            return True
 
-                pass
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
 
-        time.sleep(0.3)
-
-    print(
-        "  ✗ Use Another button not found."
-    )
+        pass
 
     return False
 
@@ -602,75 +695,122 @@ def click_use_another(driver):
 def find_capture_continue(driver):
 
     """
-    Successful capture uses:
+    Find the Continue control shown after a
+    successful capture.
 
-    <button class="enterclass"
-        onclick="this.disabled= true;
-        this.value='Loading...';
-        document.location='legendary_areas?area_id=3#search';">
-        Continue
-    </button>
+    IMPORTANT:
 
-    We target the actual Continue button.
+    We do NOT hardcode an area_id.
 
-    We also verify that it points back toward the search
-    results when possible.
+    Examples:
+
+        legendary_areas?area_id=3#search
+        legendary_areas?area_id=12#search
+        legendary_areas?area_id=17#search
+
+    All of these must work.
     """
 
-    try:
+    selectors = [
 
-        buttons = driver.find_elements(
+        (
             By.XPATH,
             "//button[normalize-space()='Continue']"
-        )
+        ),
 
-        for button in buttons:
+        (
+            By.XPATH,
+            "//input[@value='Continue']"
+        ),
 
-            try:
+        (
+            By.XPATH,
+            "//a[normalize-space()='Continue']"
+        ),
 
-                if not (
-                    button.is_displayed()
-                    and button.is_enabled()
+        (
+            By.XPATH,
+            "//*[self::button or self::input or self::a]"
+            "[contains(translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'continue')]"
+        ),
+
+    ]
+
+    for by, selector in selectors:
+
+        try:
+
+            elements = driver.find_elements(
+                by,
+                selector
+            )
+
+            for button in elements:
+
+                try:
+
+                    if not (
+                        button.is_displayed()
+                        and button.is_enabled()
+                    ):
+                        continue
+
+                    text = normalize(
+                        button.text
+                    )
+
+                    value = normalize(
+                        button.get_attribute(
+                            "value"
+                        )
+                    )
+
+                    onclick = normalize(
+                        button.get_attribute(
+                            "onclick"
+                        )
+                    )
+
+                    # ------------------------------------------------
+                    # Best match:
+                    #
+                    # Continue button whose JavaScript returns
+                    # to legendary_areas.
+                    #
+                    # DO NOT check area_id.
+                    # ------------------------------------------------
+
+                    if (
+                        "legendary_areas" in onclick
+                        and "document.location" in onclick
+                    ):
+
+                        return button
+
+                    # ------------------------------------------------
+                    # Generic Continue fallback.
+                    # ------------------------------------------------
+
+                    if (
+                        text == "continue"
+                        or value == "continue"
+                    ):
+
+                        return button
+
+                except (
+                    StaleElementReferenceException,
+                    WebDriverException,
                 ):
 
                     continue
 
-                onclick = normalize(
-                    button.get_attribute(
-                        "onclick"
-                    )
-                )
+        except Exception:
 
-                value = normalize(
-                    button.get_attribute(
-                        "value"
-                    )
-                )
-
-                # Preferred exact site behavior.
-                if (
-                    "legendary_areas" in onclick
-                    and "area_id=3" in onclick
-                ):
-
-                    return button
-
-                # Fallback: visible Continue button.
-                if (
-                    value == "continue"
-                    or normalize(button.text)
-                    == "continue"
-                ):
-
-                    return button
-
-            except StaleElementReferenceException:
-
-                continue
-
-    except Exception:
-
-        pass
+            continue
 
     return None
 
@@ -683,10 +823,7 @@ def click_capture_continue(driver):
 
     start = time.time()
 
-    while (
-        time.time() - start
-        < WAIT_LONG
-    ):
+    while time.time() - start < WAIT_LONG:
 
         button = find_capture_continue(
             driver
@@ -700,6 +837,17 @@ def click_capture_continue(driver):
                     "  ✓ Capture Continue found."
                 )
 
+                onclick = button.get_attribute(
+                    "onclick"
+                )
+
+                if onclick:
+
+                    print(
+                        f"  Continue action: "
+                        f"{onclick}"
+                    )
+
                 if safe_click(
                     driver,
                     button
@@ -709,11 +857,61 @@ def click_capture_continue(driver):
                         "  ✓ Continue clicked."
                     )
 
-                    time.sleep(
-                        random.uniform(
-                            1.0,
-                            1.8
+                    # ------------------------------------------------
+                    # Wait for navigation back to the legendary
+                    # area.
+                    # ------------------------------------------------
+
+                    navigation_start = time.time()
+
+                    while (
+                        time.time()
+                        - navigation_start
+                        < WAIT_LONG
+                    ):
+
+                        try:
+
+                            current_url = (
+                                driver.current_url
+                                .lower()
+                            )
+
+                            if (
+                                "legendary_areas"
+                                in current_url
+                            ):
+
+                                print(
+                                    "  ✓ Returned to "
+                                    "legendary area."
+                                )
+
+                                time.sleep(
+                                    random.uniform(
+                                        0.8,
+                                        1.5
+                                    )
+                                )
+
+                                return True
+
+                        except Exception:
+
+                            pass
+
+                        time.sleep(
+                            0.3
                         )
+
+                    # ------------------------------------------------
+                    # Click happened successfully even if URL
+                    # verification timed out.
+                    # ------------------------------------------------
+
+                    print(
+                        "  ⚠ Continue was clicked, "
+                        "but navigation could not be verified."
                     )
 
                     return True
@@ -725,7 +923,9 @@ def click_capture_continue(driver):
 
                 pass
 
-        time.sleep(0.3)
+        time.sleep(
+            0.3
+        )
 
     print(
         "  ✗ Capture Continue button not found."
@@ -735,36 +935,72 @@ def click_capture_continue(driver):
 
 
 # ============================================================
-# CAPTURE RESULT
+# SINGLE CAPTURE ATTEMPT
 # ============================================================
 
-def capture_completed(driver):
+def capture_attempt(driver):
 
-    """
-    Determine whether the encounter has finished.
-
-    A successful capture should eventually expose Continue.
-
-    A failed capture should expose Use Another.
-    """
-
-    if find_capture_continue(
+    if not click_item(
         driver
-    ) is not None:
+    ):
 
-        return "success"
+        return False
 
-    if find_use_another(
+    if not select_best_ball(
         driver
-    ) is not None:
+    ):
 
-        return "failed"
+        return False
 
-    return None
+    if not click_attack(
+        driver
+    ):
+
+        return False
+
+    print(
+        "  Waiting for capture result..."
+    )
+
+    start = time.time()
+
+    while time.time() - start < WAIT_LONG:
+
+        if capture_succeeded(
+            driver
+        ):
+
+            print()
+            print(
+                "  ✓ Pokémon captured!"
+            )
+
+            return True
+
+        if capture_failed(
+            driver
+        ):
+
+            print()
+            print(
+                "  ⚠ Capture failed."
+            )
+
+            return False
+
+        time.sleep(
+            0.3
+        )
+
+    print(
+        "  ⚠ Capture result timed out."
+    )
+
+    return False
 
 
 # ============================================================
-# FULL CAPTURE FLOW
+# MAIN ENCOUNTER CAPTURE
 # ============================================================
 
 def capture_encounter(driver):
@@ -774,211 +1010,104 @@ def capture_encounter(driver):
         "  Pokémon encounter!"
     )
 
-    attempt = 0
+    max_attempts = 3
 
-    while True:
-
-        attempt += 1
+    for attempt in range(
+        1,
+        max_attempts + 1
+    ):
 
         print()
         print(
             f"  Capture attempt #{attempt}"
         )
 
-        # ====================================================
-        # OPEN ITEM MENU
-        # ====================================================
+        # ----------------------------------------------------
+        # First attempt or next attempt.
+        # ----------------------------------------------------
 
-        if not click_item_action(
+        success = capture_attempt(
             driver
-        ):
-
-            print(
-                "  ✗ Could not open Item menu."
-            )
-
-            return False
-
-        # ====================================================
-        # SELECT BALL
-        # ====================================================
-
-        if not select_ball(
-            driver
-        ):
-
-            print(
-                "  ✗ Ball selection failed."
-            )
-
-            return False
-
-        # ====================================================
-        # THROW BALL / ATTACK
-        # ====================================================
-
-        if not click_capture_attack(
-            driver
-        ):
-
-            print(
-                "  ✗ Could not throw ball."
-            )
-
-            return False
-
-        print(
-            "  Waiting for capture result..."
         )
 
-        # ====================================================
-        # WAIT FOR RESULT
-        # ====================================================
+        if success:
 
-        result_start = time.time()
-
-        result = None
-
-        while (
-            time.time() - result_start
-            < WAIT_LONG
-        ):
-
-            result = capture_completed(
-                driver
-            )
-
-            if result is not None:
-
-                break
-
-            time.sleep(0.3)
-
-        # ====================================================
-        # SUCCESS
-        # ====================================================
-
-        if result == "success":
-
-            print()
             print(
-                "  ✓ Pokémon captured!"
+                "  ✓ Capture successful."
             )
+
+            # ------------------------------------------------
+            # IMPORTANT:
+            #
+            # After the Pokémon is caught, Eclipse RPG does
+            # NOT automatically return to the search page.
+            #
+            # We MUST click Continue.
+            # ------------------------------------------------
 
             print(
                 "  Continuing back to search..."
             )
 
-            if click_capture_continue(
+            if not click_capture_continue(
                 driver
             ):
 
                 print(
-                    "  ✓ Returned to search."
+                    "  ✗ Could not click capture Continue."
                 )
 
-                return True
+                return False
 
             print(
-                "  ✗ Capture succeeded, but "
-                "Continue could not be clicked."
+                "  ✓ Returned to search."
             )
 
-            return False
+            return True
 
-        # ====================================================
-        # FAILED CAPTURE
-        # ====================================================
+        # ----------------------------------------------------
+        # Capture failed.
+        #
+        # Look for Use Another.
+        # ----------------------------------------------------
 
-        if result == "failed":
+        use_another = find_use_another(
+            driver
+        )
 
-            button = find_use_another(
-                driver
-            )
-
-            if button is not None:
-
-                try:
-
-                    print()
-                    print(
-                        "  ⚠ Capture failed."
-                    )
-
-                    print(
-                        f"  {button.text.strip()}"
-                    )
-
-                except Exception:
-
-                    pass
+        if use_another:
 
             if click_use_another(
                 driver
             ):
 
                 print(
-                    "  ✓ Preparing another capture attempt..."
+                    "  ✓ Preparing another "
+                    "capture attempt..."
                 )
 
                 time.sleep(
                     random.uniform(
-                        0.8,
-                        1.4
+                        0.5,
+                        1.0
                     )
                 )
 
                 continue
 
-            print(
-                "  ✗ Could not click Use Another."
-            )
-
-            return False
-
-        # ====================================================
-        # UNKNOWN RESULT
-        # ====================================================
+        # ----------------------------------------------------
+        # No retry option.
+        # ----------------------------------------------------
 
         print(
-            "  ⚠ Capture result could not be determined."
-        )
-
-        # Give the page a little longer before declaring
-        # failure.
-
-        time.sleep(1)
-
-        if find_capture_continue(
-            driver
-        ) is not None:
-
-            print(
-                "  ✓ Capture completed."
-            )
-
-            if click_capture_continue(
-                driver
-            ):
-
-                return True
-
-        if find_use_another(
-            driver
-        ) is not None:
-
-            print(
-                "  ⚠ Capture failed; trying another ball."
-            )
-
-            if click_use_another(
-                driver
-            ):
-
-                continue
-
-        print(
-            "  ✗ Could not determine capture result."
+            "  ✗ No further capture attempt "
+            "available."
         )
 
         return False
+
+    print(
+        "  ✗ Capture attempts exhausted."
+    )
+
+    return False
