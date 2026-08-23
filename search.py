@@ -1206,3 +1206,353 @@ def search_mode(driver):
         )
 
         return
+
+
+# ============================================================
+# PHASE 3 - SPLIT SEARCH FLOWS (Search submenu)
+# ============================================================
+#
+# The functions below give the new Search submenu separate
+# "Normal Maps" and "Exclusive Legendary Areas" entries.
+#
+# They do NOT change any existing behavior - they reuse the
+# exact same helper functions (open_map, open_exclusive_area,
+# get_search_progress, run_searches, search_complete_menu)
+# that search_mode() above already uses. search_mode() itself
+# is left completely untouched.
+# ============================================================
+
+def _run_search_session(
+    driver,
+    map_name,
+    is_exclusive,
+    area=None
+):
+    """
+    Shared search loop for a single already-selected map.
+
+    This is the same loop body that lives inside search_mode()
+    above (open map -> check progress -> ask how many -> run
+    searches -> ask continue/back), factored out so both the
+    Normal Maps and Exclusive Areas submenu entries share
+    identical, already-tested behavior instead of duplicating it.
+    """
+
+    while True:
+
+        if is_exclusive:
+
+            opened = open_exclusive_area(
+                driver,
+                area
+            )
+
+        else:
+
+            opened = open_map(
+                driver,
+                map_name
+            )
+
+        if not opened:
+
+            print()
+            print(
+                "✗ Could not open selected map."
+            )
+
+            print(
+                "Returning to search menu."
+            )
+
+            return
+
+        current, maximum = get_search_progress(
+            driver
+        )
+
+        if current is not None:
+
+            print()
+            print(
+                f"Current progress: "
+                f"{current}/{maximum}"
+            )
+
+            remaining = max(
+                0,
+                maximum - current
+            )
+
+            print(
+                f"Remaining searches: "
+                f"{remaining}"
+            )
+
+        else:
+
+            maximum = 500
+            remaining = 500
+
+        default_amount = (
+            remaining
+            if remaining > 0
+            else maximum
+        )
+
+        answer = input(
+            f"\nHow many searches on "
+            f"{map_name}? "
+            f"[default {default_amount}]: "
+        ).strip()
+
+        if answer:
+
+            try:
+
+                searches = int(
+                    answer
+                )
+
+            except ValueError:
+
+                print(
+                    "✗ Invalid number."
+                )
+
+                continue
+
+        else:
+
+            searches = default_amount
+
+        searches = max(
+            0,
+            searches
+        )
+
+        if searches == 0:
+
+            print()
+            print(
+                f"No searches selected for "
+                f"{map_name}."
+            )
+
+            print(
+                "Returning to search menu."
+            )
+
+            return
+
+        if not run_searches(
+            driver,
+            map_name,
+            searches
+        ):
+
+            print()
+            print(
+                "✗ Search session stopped."
+            )
+
+            return
+
+        action = search_complete_menu(
+            driver,
+            map_name
+        )
+
+        if action == "continue":
+
+            continue
+
+        print()
+        print(
+            "Returning to search menu."
+        )
+
+        return
+
+
+def normal_maps_mode(driver):
+    """
+    Search submenu -> Normal Maps.
+
+    Lists only the regular MAPS list (unchanged), lets the
+    user pick one, then runs the same tested search session.
+    """
+
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        "NORMAL MAPS"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print()
+
+    for i, map_name in enumerate(
+        MAPS,
+        1
+    ):
+
+        print(
+            f"{i:2}. {map_name}"
+        )
+
+    back_number = len(MAPS) + 1
+
+    print(
+        f"{back_number:2}. Back"
+    )
+
+    while True:
+
+        choice = input(
+            f"\nChoose map number "
+            f"(1-{back_number}): "
+        ).strip()
+
+        try:
+
+            number = int(
+                choice
+            )
+
+        except ValueError:
+
+            print(
+                "✗ Please enter a number from "
+                f"1 to {back_number}."
+            )
+
+            continue
+
+        if number == back_number:
+            return
+
+        if 1 <= number <= len(MAPS):
+            break
+
+        print(
+            "✗ Please enter a number from "
+            f"1 to {back_number}."
+        )
+
+    map_name = MAPS[
+        number - 1
+    ]
+
+    _run_search_session(
+        driver,
+        map_name,
+        is_exclusive=False
+    )
+
+
+def exclusive_maps_mode(driver):
+    """
+    Search submenu -> Exclusive Legendary Areas.
+
+    Dynamically discovers unlocked exclusive maps via
+    get_exclusive_maps() (unchanged) rather than a hard-coded
+    list. If nothing is unlocked, says so clearly and returns.
+    """
+
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        "EXCLUSIVE LEGENDARY AREAS"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    exclusive_maps = get_exclusive_maps(
+        driver
+    )
+
+    if not exclusive_maps:
+
+        print()
+        print(
+            "No exclusive maps are currently unlocked."
+        )
+
+        input(
+            "\nPress Enter to return to the search menu..."
+        )
+
+        return
+
+    print()
+
+    for i, area in enumerate(
+        exclusive_maps,
+        1
+    ):
+
+        print(
+            f"{i:2}. {area['name']}"
+        )
+
+    back_number = len(exclusive_maps) + 1
+
+    print(
+        f"{back_number:2}. Back"
+    )
+
+    while True:
+
+        choice = input(
+            f"\nChoose map number "
+            f"(1-{back_number}): "
+        ).strip()
+
+        try:
+
+            number = int(
+                choice
+            )
+
+        except ValueError:
+
+            print(
+                "✗ Please enter a number from "
+                f"1 to {back_number}."
+            )
+
+            continue
+
+        if number == back_number:
+            return
+
+        if 1 <= number <= len(exclusive_maps):
+            break
+
+        print(
+            "✗ Please enter a number from "
+            f"1 to {back_number}."
+        )
+
+    area = exclusive_maps[
+        number - 1
+    ]
+
+    _run_search_session(
+        driver,
+        area["name"],
+        is_exclusive=True,
+        area=area
+    )

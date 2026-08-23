@@ -13,9 +13,9 @@ than pretending to do something they can't.
 """
 
 from training import train_mode
-from search import search_mode
 from mining import miner_mode
 from trade import trade_mode
+from menus.search_menu import search_menu
 
 
 BANNER = r"""
@@ -77,7 +77,7 @@ def main_menu(driver):
             train_mode(driver)
 
         elif choice == "2":
-            search_mode(driver)
+            search_menu(driver)
 
         elif choice == "3":
             miner_mode(driver)
