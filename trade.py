@@ -6,7 +6,6 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.common.exceptions import (
     TimeoutException,
     StaleElementReferenceException,
-    WebDriverException,
 )
 
 from config import WAIT_LONG
@@ -20,8 +19,9 @@ from utils import safe_click, normalize
 def wait_ready(driver, timeout=WAIT_LONG):
     try:
         WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState")
-            in ("interactive", "complete")
+            lambda d: d.execute_script(
+                "return document.readyState"
+            ) in ("interactive", "complete")
         )
     except Exception:
         pass
@@ -32,7 +32,8 @@ def find_visible(driver, by, value, timeout=WAIT_LONG):
         return WebDriverWait(driver, timeout).until(
             lambda d: next(
                 (
-                    el for el in d.find_elements(by, value)
+                    el
+                    for el in d.find_elements(by, value)
                     if el.is_displayed() and el.is_enabled()
                 ),
                 None,
@@ -71,7 +72,12 @@ def click_element(driver, element):
 
     try:
         driver.execute_script(
-            "arguments[0].scrollIntoView({block:'center', inline:'center'});",
+            """
+            arguments[0].scrollIntoView({
+                block: 'center',
+                inline: 'center'
+            });
+            """,
             element,
         )
     except Exception:
@@ -80,15 +86,19 @@ def click_element(driver, element):
     return safe_click(driver, element)
 
 
+# ============================================================
+# POKEMON NAME HELPERS
+# ============================================================
+
 def normalize_pokemon_name(name):
     """
-    Convert things like:
+    Convert Pokémon names into a comparison-friendly format.
 
-        Crystal Gastly
-        crystalgastly
-        Shiny Gastly
+    Examples:
 
-    into a normalized comparison string.
+        Crystal Gastly -> crystalgastly
+        crystal gastly -> crystalgastly
+        Shiny Gastly   -> shinygastly
     """
 
     return re.sub(
@@ -97,215 +107,6 @@ def normalize_pokemon_name(name):
         normalize(name),
     )
 
-
-# ============================================================
-# RECIPIENT
-# ============================================================
-
-def select_recipient_method(driver):
-    print("Selecting recipient method...")
-
-    method = find_first(
-        driver,
-        [
-            (
-                By.CSS_SELECTOR,
-                "select[name='CAT_Method']",
-            ),
-            (
-                By.ID,
-                "CAT_Method",
-            ),
-        ],
-    )
-
-    if not method:
-        print("  ✗ Recipient method selector not found.")
-        return False
-
-    return method
-
-
-def find_recipient_input(driver):
-    """
-    CAT_Choice is referenced by the site's CAT_Method
-    onchange handler.
-
-    We also check several common selectors so this remains
-    tolerant of small page changes.
-    """
-
-    return find_first(
-        driver,
-        [
-            (By.ID, "CAT_Choice"),
-            (By.NAME, "CAT_Choice"),
-            (By.CSS_SELECTOR, "input[name='CAT_Choice']"),
-            (By.CSS_SELECTOR, "input#CAT_Choice"),
-        ],
-    )
-
-
-def set_recipient(driver):
-    print("\n============================================================")
-    print("TRADE RECIPIENT")
-    print("============================================================")
-
-    print("1. Username")
-    print("2. User ID")
-
-    while True:
-        choice = input("\nChoose recipient type: ").strip()
-
-        if choice in ("1", "2"):
-            break
-
-        print("✗ Invalid choice.")
-
-    recipient = input(
-        "\nEnter username/User ID: "
-    ).strip()
-
-    if not recipient:
-        print("✗ Recipient cannot be empty.")
-        return False
-
-    method = select_recipient_method(driver)
-
-    if not method:
-        return False
-
-    try:
-        select = Select(method)
-
-        if choice == "1":
-            select.select_by_value("2")
-            print("  ✓ Username selected.")
-        else:
-            select.select_by_value("1")
-            print("  ✓ User ID selected.")
-
-    except Exception as e:
-        print(f"  ✗ Could not select recipient method: {e}")
-        return False
-
-    time.sleep(0.5)
-
-    field = find_recipient_input(driver)
-
-    if not field:
-        print("  ✗ Recipient input field not found.")
-        print("    Expected #CAT_Choice.")
-        return False
-
-    try:
-        field.clear()
-        field.send_keys(recipient)
-
-        print(
-            f"  ✓ Recipient entered: {recipient}"
-        )
-
-    except Exception as e:
-        print(f"  ✗ Could not enter recipient: {e}")
-        return False
-
-    return True
-
-
-# ============================================================
-# POKEMON SEARCH
-# ============================================================
-
-def find_trade_search(driver):
-    return find_first(
-        driver,
-        [
-            (
-                By.CSS_SELECTOR,
-                "input.trade-search[data-target='#CAT_User']",
-            ),
-            (
-                By.CSS_SELECTOR,
-                "input[data-target='#CAT_User']",
-            ),
-            (
-                By.XPATH,
-                "//input[@placeholder='Search...' and "
-                "@data-target='#CAT_User']",
-            ),
-        ],
-    )
-
-
-def clear_pokemon_search(driver):
-    search = find_trade_search(driver,)
-
-    if not search:
-        return False
-
-    try:
-        search.clear()
-
-        # Trigger the site's input/change handlers.
-        driver.execute_script(
-            """
-            arguments[0].dispatchEvent(
-                new Event('input', {bubbles: true})
-            );
-            arguments[0].dispatchEvent(
-                new Event('change', {bubbles: true})
-            );
-            """,
-            search,
-        )
-
-        time.sleep(0.5)
-        return True
-
-    except Exception:
-        return False
-
-
-def search_pokemon(driver, pokemon):
-    search = find_trade_search(driver)
-
-    if not search:
-        print("  ✗ Pokémon search box not found.")
-        return False
-
-    try:
-        search.clear()
-        search.send_keys(pokemon)
-
-        driver.execute_script(
-            """
-            arguments[0].dispatchEvent(
-                new Event('input', {bubbles: true})
-            );
-            arguments[0].dispatchEvent(
-                new Event('keyup', {bubbles: true})
-            );
-            """,
-            search,
-        )
-
-        time.sleep(0.8)
-
-        print(
-            f"  ✓ Searching trade inventory for '{pokemon}'..."
-        )
-
-        return True
-
-    except Exception as e:
-        print(f"  ✗ Pokémon search failed: {e}")
-        return False
-
-
-# ============================================================
-# POKEMON MATCHING
-# ============================================================
 
 def parse_pokemon_request(request):
     """
@@ -361,7 +162,10 @@ def parse_pokemon_request(request):
 
     pokemon_name = "".join(words)
 
-    # Remove plural "s" for simple requests like "gastlys".
+    # Handle simple plurals:
+    #
+    # gastlys -> gastly
+    #
     if pokemon_name.endswith("s") and not pokemon_name.endswith("ss"):
         pokemon_name = pokemon_name[:-1]
 
@@ -370,7 +174,7 @@ def parse_pokemon_request(request):
 
 def option_matches(option_text, variant, pokemon_name):
     """
-    Match the site's option text.
+    Match the site's Pokémon option text.
 
     Examples:
 
@@ -401,20 +205,362 @@ def option_matches(option_text, variant, pokemon_name):
 
         return text_without_level == wanted
 
-    # Normal Pokémon means EXACTLY the normal species.
+    # A normal Pokémon request must only match
+    # the normal species.
     #
-    # Therefore:
-    #
-    # gastly -> Gastly
-    #
-    # but NOT:
-    #
-    # CrystalGastly
-    # ShinyGastly
-    # DarkGastly
+    # gastly:
+    #   Gastly       YES
+    #   CrystalGastly NO
+    #   ShinyGastly   NO
+    #   DarkGastly    NO
     #
     return text_without_level == target
 
+
+# ============================================================
+# RECIPIENT
+# ============================================================
+
+def select_recipient_method(driver):
+    print("Selecting recipient method...")
+
+    method = find_first(
+        driver,
+        [
+            (
+                By.CSS_SELECTOR,
+                "select[name='CAT_Method']",
+            ),
+            (
+                By.ID,
+                "CAT_Method",
+            ),
+        ],
+    )
+
+    if not method:
+        print(
+            "  ✗ Recipient method selector not found."
+        )
+        return False
+
+    return method
+
+
+def find_recipient_input(driver):
+    """
+    Find the recipient input used by CAT_Method.
+
+    The known field is:
+
+        #CAT_Choice
+    """
+
+    return find_first(
+        driver,
+        [
+            (
+                By.ID,
+                "CAT_Choice",
+            ),
+            (
+                By.NAME,
+                "CAT_Choice",
+            ),
+            (
+                By.CSS_SELECTOR,
+                "input[name='CAT_Choice']",
+            ),
+            (
+                By.CSS_SELECTOR,
+                "input#CAT_Choice",
+            ),
+        ],
+    )
+
+
+def set_recipient(driver):
+    print()
+    print("=" * 60)
+    print("TRADE RECIPIENT")
+    print("=" * 60)
+
+    print()
+    print("1. Username")
+    print("2. User ID")
+
+    while True:
+        choice = input(
+            "\nChoose recipient type: "
+        ).strip()
+
+        if choice in ("1", "2"):
+            break
+
+        print("✗ Invalid choice.")
+
+    recipient = input(
+        "\nEnter username/User ID: "
+    ).strip()
+
+    if not recipient:
+        print(
+            "✗ Recipient cannot be empty."
+        )
+        return False
+
+    method = select_recipient_method(driver)
+
+    if not method:
+        return False
+
+    try:
+        select = Select(method)
+
+        if choice == "1":
+            # Website:
+            # value="2" = Username
+            select.select_by_value("2")
+
+            print(
+                "  ✓ Username selected."
+            )
+
+        else:
+            # Website:
+            # value="1" = User ID
+            select.select_by_value("1")
+
+            print(
+                "  ✓ User ID selected."
+            )
+
+    except Exception as e:
+        print(
+            f"  ✗ Could not select recipient method: {e}"
+        )
+        return False
+
+    time.sleep(0.5)
+
+    field = find_recipient_input(driver)
+
+    if not field:
+        print(
+            "  ✗ Recipient input field not found."
+        )
+        print(
+            "    Expected #CAT_Choice."
+        )
+        return False
+
+    try:
+        field.clear()
+        field.send_keys(recipient)
+
+        print(
+            f"  ✓ Recipient entered: {recipient}"
+        )
+
+    except Exception as e:
+        print(
+            f"  ✗ Could not enter recipient: {e}"
+        )
+        return False
+
+    return True
+
+
+# ============================================================
+# INITIATE TRADE
+# ============================================================
+
+def initiate_trade(driver):
+    """
+    Click the actual 'Initiate Trade' button.
+
+    Website HTML:
+
+        <input
+            type="submit"
+            id="CAT_Submit"
+            value="Initiate Trade"
+            ...
+            onclick="... initiate_trade('F');"
+        >
+
+    This MUST happen before CAT_User / CAT_Recipient
+    become available.
+    """
+
+    print()
+    print("Initiating trade...")
+
+    button = find_first(
+        driver,
+        [
+            (
+                By.ID,
+                "CAT_Submit",
+            ),
+            (
+                By.CSS_SELECTOR,
+                "input[value='Initiate Trade']",
+            ),
+        ],
+        timeout=WAIT_LONG,
+    )
+
+    if not button:
+        print(
+            "  ✗ Initiate Trade button not found."
+        )
+        return False
+
+    value = button.get_attribute("value") or ""
+
+    print(
+        f"  ✓ Initiate Trade button found: '{value}'"
+    )
+
+    if not click_element(driver, button):
+        print(
+            "  ✗ Could not click Initiate Trade."
+        )
+        return False
+
+    print(
+        "  ✓ Initiate Trade clicked."
+    )
+
+    # Wait for the page/DOM to update.
+    wait_ready(driver)
+
+    time.sleep(1)
+
+    # The trade inventory should now exist.
+    pokemon_select = find_visible(
+        driver,
+        By.ID,
+        "CAT_User",
+        timeout=WAIT_LONG,
+    )
+
+    if not pokemon_select:
+        print(
+            "  ✗ Trade was initiated, but "
+            "the Pokémon selector (#CAT_User) "
+            "was not found."
+        )
+        return False
+
+    print(
+        "  ✓ Trade Pokémon selection loaded."
+    )
+
+    return True
+
+
+# ============================================================
+# POKEMON SEARCH
+# ============================================================
+
+def find_trade_search(driver):
+    return find_first(
+        driver,
+        [
+            (
+                By.CSS_SELECTOR,
+                "input.trade-search[data-target='#CAT_User']",
+            ),
+            (
+                By.CSS_SELECTOR,
+                "input[data-target='#CAT_User']",
+            ),
+            (
+                By.XPATH,
+                "//input[@placeholder='Search...' "
+                "and @data-target='#CAT_User']",
+            ),
+        ],
+    )
+
+
+def clear_pokemon_search(driver):
+    search = find_trade_search(driver)
+
+    if not search:
+        return False
+
+    try:
+        search.clear()
+
+        driver.execute_script(
+            """
+            arguments[0].dispatchEvent(
+                new Event('input', {bubbles: true})
+            );
+
+            arguments[0].dispatchEvent(
+                new Event('change', {bubbles: true})
+            );
+            """,
+            search,
+        )
+
+        time.sleep(0.5)
+
+        return True
+
+    except Exception:
+        return False
+
+
+def search_pokemon(driver, pokemon):
+    search = find_trade_search(driver)
+
+    if not search:
+        print(
+            "  ✗ Pokémon search box not found."
+        )
+        return False
+
+    try:
+        search.clear()
+        search.send_keys(pokemon)
+
+        driver.execute_script(
+            """
+            arguments[0].dispatchEvent(
+                new Event('input', {bubbles: true})
+            );
+
+            arguments[0].dispatchEvent(
+                new Event('keyup', {bubbles: true})
+            );
+            """,
+            search,
+        )
+
+        time.sleep(0.8)
+
+        print(
+            f"  ✓ Searching trade inventory for "
+            f"'{pokemon}'..."
+        )
+
+        return True
+
+    except Exception as e:
+        print(
+            f"  ✗ Pokémon search failed: {e}"
+        )
+        return False
+
+
+# ============================================================
+# POKEMON OPTIONS
+# ============================================================
 
 def get_trade_options(driver):
     try:
@@ -443,17 +589,24 @@ def select_pokemon(driver, request, quantity):
     )
 
     if not pokemon_name:
-        print("✗ Invalid Pokémon name.")
+        print(
+            "✗ Invalid Pokémon name."
+        )
         return False
 
+    print()
     print(
-        f"\nSearching for: "
+        f"Searching for: "
         f"{'all ' if all_variants else ''}"
         f"{variant + ' ' if variant else ''}"
         f"{pokemon_name}"
     )
 
-    if not search_pokemon(driver, request):
+    # Use the site's search box.
+    if not search_pokemon(
+        driver,
+        request,
+    ):
         return False
 
     select_element = find_visible(
@@ -464,7 +617,9 @@ def select_pokemon(driver, request, quantity):
     )
 
     if not select_element:
-        print("  ✗ Pokémon list not found.")
+        print(
+            "  ✗ Pokémon list not found."
+        )
         return False
 
     options = select_element.find_elements(
@@ -496,7 +651,8 @@ def select_pokemon(driver, request, quantity):
 
     if not matches:
         print(
-            f"  ✗ No matching Pokémon found for '{request}'."
+            f"  ✗ No matching Pokémon found "
+            f"for '{request}'."
         )
         return False
 
@@ -504,9 +660,10 @@ def select_pokemon(driver, request, quantity):
         f"  ✓ Found {len(matches)} matching Pokémon."
     )
 
-    # Determine how many to select.
+    # None means "all".
     if quantity is None:
         selected_count = len(matches)
+
     else:
         selected_count = min(
             quantity,
@@ -514,32 +671,60 @@ def select_pokemon(driver, request, quantity):
         )
 
     if selected_count <= 0:
-        print("✗ Quantity must be greater than zero.")
+        print(
+            "✗ Quantity must be greater than zero."
+        )
         return False
 
     selected = matches[:selected_count]
 
-    # Selenium multi-select.
     try:
+        # First clear any previous selection.
+        driver.execute_script(
+            """
+            const select =
+                document.getElementById('CAT_User');
+
+            if (select) {
+                for (const option of select.options) {
+                    option.selected = false;
+                }
+            }
+            """
+        )
+
+        # Select requested Pokémon.
         for option in selected:
             driver.execute_script(
                 """
                 arguments[0].selected = true;
+
                 arguments[0].dispatchEvent(
-                    new Event('change', {bubbles:true})
+                    new Event('change', {
+                        bubbles: true
+                    })
                 );
                 """,
                 option,
             )
 
-        # Trigger the site's selection-count handlers.
+        # Trigger the site's selection-count handler.
         driver.execute_script(
             """
-            const select = document.getElementById('CAT_User');
+            const select =
+                document.getElementById('CAT_User');
 
             if (select) {
                 select.dispatchEvent(
-                    new Event('change', {bubbles:true})
+                    new Event('change', {
+                        bubbles: true
+                    })
+                );
+
+                select.dispatchEvent(
+                    new Event('input', {
+                        bubbles: true
+                    })
                 );
             }
             """
@@ -576,20 +761,26 @@ def ask_quantity(request):
         ask how many
 
     'all ...':
-        allow Enter for all
+        Enter means all.
     """
 
-    _, _, all_variants = parse_pokemon_request(request)
+    _, _, all_variants = parse_pokemon_request(
+        request
+    )
 
     while True:
+
         if all_variants:
+
             raw = input(
                 "\nHow many? [Enter = all]: "
             ).strip()
 
             if not raw:
                 return None
+
         else:
+
             raw = input(
                 "\nHow many: "
             ).strip()
@@ -606,7 +797,9 @@ def ask_quantity(request):
             return quantity
 
         except ValueError:
-            print("✗ Enter a valid number.")
+            print(
+                "✗ Enter a valid number."
+            )
 
 
 # ============================================================
@@ -614,7 +807,8 @@ def ask_quantity(request):
 # ============================================================
 
 def click_create_trade(driver):
-    print("\nCreating trade...")
+    print()
+    print("Creating trade...")
 
     button = find_first(
         driver,
@@ -631,37 +825,58 @@ def click_create_trade(driver):
     )
 
     if not button:
-        print("  ✗ Create Trade button not found.")
+        print(
+            "  ✗ Create Trade button not found."
+        )
         return False
 
-    if not click_element(driver, button):
-        print("  ✗ Could not click Create Trade.")
+    value = button.get_attribute("value") or ""
+
+    print(
+        f"  ✓ Create Trade button found: "
+        f"'{value}'"
+    )
+
+    if not click_element(
+        driver,
+        button,
+    ):
+        print(
+            "  ✗ Could not click Create Trade."
+        )
         return False
 
-    print("  ✓ Create Trade clicked.")
+    print(
+        "  ✓ Create Trade clicked."
+    )
 
     return True
 
 
 def accept_trade_confirmation(driver):
     """
-    The site uses a JavaScript confirm():
+    The site uses JavaScript confirm():
 
         proceed with trade
+
         OK / Cancel
 
     Selenium exposes this as a browser alert.
     """
 
-    print("  Waiting for trade confirmation...")
+    print(
+        "  Waiting for trade confirmation..."
+    )
 
     try:
-        alert = WebDriverWait(
+        WebDriverWait(
             driver,
             10,
         ).until(
             lambda d: d.switch_to.alert
         )
+
+        alert = driver.switch_to.alert
 
         text = alert.text.strip()
 
@@ -682,7 +897,6 @@ def accept_trade_confirmation(driver):
             "  ⚠ No browser confirmation appeared."
         )
 
-        # It may have already navigated successfully.
         return True
 
     except Exception as e:
@@ -697,7 +911,8 @@ def accept_trade_confirmation(driver):
 # ============================================================
 
 def open_create_trade(driver):
-    print("\nOpening Create A Trade...")
+    print()
+    print("Opening Create A Trade...")
 
     link = find_first(
         driver,
@@ -705,9 +920,11 @@ def open_create_trade(driver):
             (
                 By.XPATH,
                 "//a[contains("
-                "translate(normalize-space(.),"
+                "translate("
+                "normalize-space(.),"
                 "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
-                "'abcdefghijklmnopqrstuvwxyz'),"
+                "'abcdefghijklmnopqrstuvwxyz'"
+                "),"
                 "'create a trade'"
                 ")]",
             ),
@@ -729,7 +946,10 @@ def open_create_trade(driver):
         f"'{link.text.strip()}'"
     )
 
-    if not click_element(driver, link):
+    if not click_element(
+        driver,
+        link,
+    ):
         print(
             "  ✗ Could not click Create A Trade."
         )
@@ -749,16 +969,23 @@ def open_create_trade(driver):
 # ============================================================
 
 def trade_mode(driver):
-    print("\n" + "=" * 60)
-    print("TRADE MODE")
-    print("=" * 60)
+    print(
+        "\n"
+        + "=" * 60
+        + "\nTRADE MODE\n"
+        + "=" * 60
+    )
 
     try:
+
         # ----------------------------------------------------
         # Make sure we're on the Trading Center.
         # ----------------------------------------------------
 
-        if "create_a_trade" not in driver.current_url.lower():
+        current_url = driver.current_url.lower()
+
+        if "create_a_trade" not in current_url:
+
             trading_link = find_first(
                 driver,
                 [
@@ -774,15 +1001,24 @@ def trade_mode(driver):
             )
 
             if trading_link:
-                print("Opening Trading Center...")
-                click_element(
+
+                print(
+                    "Opening Trading Center..."
+                )
+
+                if not click_element(
                     driver,
                     trading_link,
-                )
+                ):
+                    print(
+                        "  ✗ Could not open Trading Center."
+                    )
+                    return
+
                 wait_ready(driver)
 
         # ----------------------------------------------------
-        # Create A Trade
+        # Open Create A Trade.
         # ----------------------------------------------------
 
         if "create_a_trade" not in driver.current_url.lower():
@@ -791,35 +1027,45 @@ def trade_mode(driver):
                 return
 
         # ----------------------------------------------------
-        # Recipient
+        # Set recipient.
         # ----------------------------------------------------
 
         if not set_recipient(driver):
             return
 
         # ----------------------------------------------------
-        # Pokémon
+        # IMPORTANT:
+        #
+        # The recipient is entered first.
+        #
+        # The website requires:
+        #
+        # CAT_Submit
+        #
+        # "Initiate Trade"
+        #
+        # before CAT_User / CAT_Recipient are
+        # populated.
         # ----------------------------------------------------
 
-        print("\n============================================================")
-        print("POKÉMON TO TRADE")
-        print("============================================================")
+        if not initiate_trade(driver):
+            return
 
-        print(
-            "\nExamples:"
-        )
-        print(
-            "  gastly"
-        )
-        print(
-            "  crystal gastly"
-        )
-        print(
-            "  all gastlys"
-        )
-        print(
-            "  all crystal gastlys"
-        )
+        # ----------------------------------------------------
+        # Pokémon.
+        # ----------------------------------------------------
+
+        print()
+        print("=" * 60)
+        print("POKÉMON TO TRADE")
+        print("=" * 60)
+
+        print()
+        print("Examples:")
+        print("  gastly")
+        print("  crystal gastly")
+        print("  all gastlys")
+        print("  all crystal gastlys")
 
         request = input(
             "\nPokemon to trade: "
@@ -831,10 +1077,12 @@ def trade_mode(driver):
             )
             return
 
-        quantity = ask_quantity(request)
+        quantity = ask_quantity(
+            request
+        )
 
         # ----------------------------------------------------
-        # Select Pokémon
+        # Select Pokémon.
         # ----------------------------------------------------
 
         if not select_pokemon(
@@ -845,61 +1093,67 @@ def trade_mode(driver):
             return
 
         # ----------------------------------------------------
-        # Final confirmation before submitting
+        # Final confirmation from our bot.
         # ----------------------------------------------------
 
-        print(
-            "\n============================================================"
-        )
+        print()
+        print("=" * 60)
         print("TRADE READY")
-        print(
-            "============================================================"
-        )
+        print("=" * 60)
 
         print(
-            "The selected Pokémon are ready to be traded."
+            "The selected Pokémon are ready "
+            "to be traded."
         )
 
         confirm = input(
             "\nCreate this trade? [Y/n]: "
         ).strip().lower()
 
-        if confirm not in ("", "y", "yes"):
+        if confirm not in (
+            "",
+            "y",
+            "yes",
+        ):
             print(
                 "Trade cancelled."
             )
             return
 
         # ----------------------------------------------------
-        # Create trade
+        # Click Create Trade.
         # ----------------------------------------------------
 
-        if not click_create_trade(driver):
+        if not click_create_trade(
+            driver
+        ):
             return
 
         # ----------------------------------------------------
-        # Browser JavaScript confirmation
+        # Website confirmation:
+        #
+        # "proceed with trade"
+        #
+        # OK / Cancel
         # ----------------------------------------------------
 
-        if not accept_trade_confirmation(driver):
+        if not accept_trade_confirmation(
+            driver
+        ):
             return
 
         wait_ready(driver)
 
-        print(
-            "\n✓ Trade submitted."
-        )
+        print()
+        print("=" * 60)
+        print("✓ TRADE SUBMITTED")
+        print("=" * 60)
 
         print(
             "\nReturning to main menu..."
         )
 
-    except KeyboardInterrupt:
-        print(
-            "\nStopped by user."
-        )
-
     except Exception as e:
         print(
-            f"\n✗ Trade automation failed: {e}"
+            f"\n✗ Trade mode error: {e}"
         )

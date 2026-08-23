@@ -31,21 +31,27 @@ def main_menu(driver):
         ).strip()
 
         if choice == "1":
+
             train_mode(driver)
 
         elif choice == "2":
+
             search_mode(driver)
 
         elif choice == "3":
+
             miner_mode(driver)
 
         elif choice == "4":
+
             trade_mode(driver)
 
         elif choice == "5":
+
             break
 
         else:
+
             print(
                 "✗ Invalid choice."
             )
@@ -66,10 +72,12 @@ def main():
         )
 
         if not password:
+
             print(
                 "✗ No saved password found. "
                 "Please remove and re-add the account."
             )
+
             return
 
         driver = setup_driver()
@@ -79,9 +87,11 @@ def main():
             account,
             password,
         ):
+
             print(
                 "✗ Login failed."
             )
+
             return
 
         main_menu(driver)
