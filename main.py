@@ -1,60 +1,7 @@
 from account import account_selector, get_saved_password
 from browser import setup_driver
 from login import login
-from training import train_mode
-from search import search_mode
-from mining import miner_mode
-from trade import trade_mode
-
-
-def main_menu(driver):
-    while True:
-
-        print(
-            "\n"
-            + "=" * 60
-            + "\nECLIPSE RPG AUTOMATION\n"
-            + "=" * 60
-        )
-
-        print(
-            "\n"
-            "1. I want to train\n"
-            "2. I want to search\n"
-            "3. A-Miner\n"
-            "4. Trade\n"
-            "5. Exit"
-        )
-
-        choice = input(
-            "\nChoose: "
-        ).strip()
-
-        if choice == "1":
-
-            train_mode(driver)
-
-        elif choice == "2":
-
-            search_mode(driver)
-
-        elif choice == "3":
-
-            miner_mode(driver)
-
-        elif choice == "4":
-
-            trade_mode(driver)
-
-        elif choice == "5":
-
-            break
-
-        else:
-
-            print(
-                "✗ Invalid choice."
-            )
+from menus.main_menu import main_menu
 
 
 def main():
