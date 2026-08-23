@@ -192,46 +192,6 @@ def click_item(driver):
 # BALL SELECTION
 # ============================================================
 
-def find_ball(driver):
-
-    selectors = [
-
-        (
-            By.XPATH,
-            "//input[contains("
-            "translate(@value,"
-            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
-            "'abcdefghijklmnopqrstuvwxyz'),"
-            "'ball')]"
-        ),
-
-        (
-            By.XPATH,
-            "//button[contains("
-            "translate(normalize-space(.),"
-            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
-            "'abcdefghijklmnopqrstuvwxyz'),"
-            "'ball')]"
-        ),
-
-        (
-            By.XPATH,
-            "//a[contains("
-            "translate(normalize-space(.),"
-            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
-            "'abcdefghijklmnopqrstuvwxyz'),"
-            "'ball')]"
-        ),
-
-    ]
-
-    return find_first_visible(
-        driver,
-        selectors,
-        timeout=WAIT_LONG,
-    )
-
-
 def get_available_balls(driver):
 
     balls = []
@@ -239,37 +199,33 @@ def get_available_balls(driver):
     try:
 
         elements = driver.find_elements(
-            By.XPATH,
-            "//*[self::input or self::button or self::a]"
+            By.CSS_SELECTOR,
+            "span[onclick*='item_choice(']"
         )
 
         for element in elements:
 
             try:
 
-                if not (
-                    element.is_displayed()
-                    and element.is_enabled()
-                ):
+                if not element.is_displayed():
                     continue
 
-                text = (
-                    element.text.strip()
-                    or (
-                        element.get_attribute(
-                            "value"
-                        )
-                        or ""
-                    ).strip()
+                image = element.find_element(
+                    By.TAG_NAME,
+                    "img"
                 )
 
-                if not text:
+                alt = (
+                    image.get_attribute("alt")
+                    or ""
+                ).strip()
+
+                if not alt:
                     continue
 
-                lowered = normalize(
-                    text
-                )
+                lowered = normalize(alt)
 
+                # Only accept actual Poké Balls.
                 if (
                     "pokeball" in lowered
                     or "great ball" in lowered
@@ -293,9 +249,8 @@ def get_available_balls(driver):
                     or "master ball" in lowered
                 ):
 
-                    if text not in balls:
-
-                        balls.append(text)
+                    if alt not in balls:
+                        balls.append(alt)
 
             except (
                 StaleElementReferenceException,
@@ -358,6 +313,11 @@ def select_best_ball(driver):
                 if selected:
                     break
 
+            # ----------------------------------------------------
+            # If none of the preferred balls exists, use the
+            # first available ball.
+            # ----------------------------------------------------
+
             if not selected:
 
                 selected = balls[0]
@@ -366,55 +326,84 @@ def select_best_ball(driver):
                 f"  Selecting {selected}..."
             )
 
-            elements = driver.find_elements(
-                By.XPATH,
-                "//*[self::input or self::button or self::a]"
-            )
+            # ----------------------------------------------------
+            # IMPORTANT:
+            #
+            # Eclipse RPG uses:
+            #
+            # <span onclick="item_choice(3803194);">
+            #     <img src="/images/items/ultra_ball.png"
+            #          alt="Ultra Ball">
+            # </span>
+            #
+            # So we click the SPAN, not the image.
+            # ----------------------------------------------------
 
-            for element in elements:
+            try:
 
-                try:
+                elements = driver.find_elements(
+                    By.CSS_SELECTOR,
+                    "span[onclick*='item_choice(']"
+                )
 
-                    if not (
-                        element.is_displayed()
-                        and element.is_enabled()
-                    ):
-                        continue
+                for element in elements:
 
-                    text = (
-                        element.text.strip()
-                        or (
-                            element.get_attribute(
-                                "value"
+                    try:
+
+                        if not (
+                            element.is_displayed()
+                        ):
+                            continue
+
+                        image = element.find_element(
+                            By.TAG_NAME,
+                            "img"
+                        )
+
+                        alt = (
+                            image.get_attribute(
+                                "alt"
                             )
                             or ""
                         ).strip()
-                    )
 
-                    if normalize(text) != normalize(
-                        selected
-                    ):
-                        continue
-
-                    if safe_click(
-                        driver,
-                        element
-                    ):
+                        if normalize(alt) != normalize(
+                            selected
+                        ):
+                            continue
 
                         print(
-                            f"  ✓ {selected} clicked."
+                            f"  ✓ Found {selected} "
+                            "selection."
                         )
 
-                        return True
+                        if safe_click(
+                            driver,
+                            element
+                        ):
 
-                except (
-                    StaleElementReferenceException,
-                    WebDriverException,
-                ):
+                            print(
+                                f"  ✓ {selected} clicked."
+                            )
 
-                    continue
+                            return True
 
-        time.sleep(0.3)
+                    except (
+                        StaleElementReferenceException,
+                        WebDriverException,
+                    ):
+
+                        continue
+
+            except Exception as e:
+
+                print(
+                    f"  ⚠ Ball selection error: {e}"
+                )
+
+        time.sleep(
+            0.3
+        )
 
     print(
         "  ✗ No usable Poké Ball found."
