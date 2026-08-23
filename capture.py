@@ -21,6 +21,24 @@ WAIT_LONG = 20
 
 
 # ============================================================
+# CAPTURE PREFERENCES (Phase 4)
+# ============================================================
+#
+# Ball priority order. select_best_ball() picks the first ball
+# in this list that's actually available; if none of the
+# preferred balls are available it falls back to whatever ball
+# IS available. Pulled out to a constant here (instead of being
+# inline in select_best_ball) so it can be wired up to Settings
+# in a later phase without touching the selection logic itself.
+
+PREFERRED_BALL_ORDER = [
+    "Ultra Ball",
+    "Great Ball",
+    "Pokeball",
+]
+
+
+# ============================================================
 # HELPERS
 # ============================================================
 
@@ -266,6 +284,24 @@ def get_available_balls(driver):
     return balls
 
 
+def has_usable_ball(driver):
+    """
+    Phase 4 - inventory awareness.
+
+    Quick check for whether at least one usable Poke Ball is
+    currently available, without going through the full
+    select_best_ball() polling/selection flow. Used to stop an
+    encounter cleanly instead of burning capture attempts when
+    the account genuinely has no balls left.
+    """
+
+    return bool(
+        get_available_balls(
+            driver
+        )
+    )
+
+
 def select_best_ball(driver):
 
     print(
@@ -291,11 +327,7 @@ def select_best_ball(driver):
             # Prefer the strongest commonly available ball.
             # ----------------------------------------------------
 
-            preferred = [
-                "Ultra Ball",
-                "Great Ball",
-                "Pokeball",
-            ]
+            preferred = PREFERRED_BALL_ORDER
 
             selected = None
 
@@ -935,6 +967,25 @@ def capture_attempt(driver):
 
         return False
 
+    # ----------------------------------------------------
+    # Phase 4 - inventory awareness.
+    #
+    # Check ball availability up front. If there's genuinely
+    # no usable ball, say so clearly instead of letting
+    # select_best_ball() poll for the full WAIT_LONG timeout
+    # only to report the same thing.
+    # ----------------------------------------------------
+
+    if not has_usable_ball(
+        driver
+    ):
+
+        print(
+            "  ✗ No usable Poke Ball in inventory."
+        )
+
+        return False
+
     if not select_best_ball(
         driver
     ):
@@ -1057,6 +1108,24 @@ def capture_encounter(driver):
         # ----------------------------------------------------
         # Capture failed.
         #
+        # Phase 4 - inventory awareness: if there's genuinely
+        # no ball left, stop here instead of clicking
+        # "Use Another" and looping through the remaining
+        # attempts for no reason.
+        # ----------------------------------------------------
+
+        if not has_usable_ball(
+            driver
+        ):
+
+            print(
+                "  ✗ Out of usable Poke Balls. "
+                "Stopping encounter."
+            )
+
+            return False
+
+        # ----------------------------------------------------
         # Look for Use Another.
         # ----------------------------------------------------
 
