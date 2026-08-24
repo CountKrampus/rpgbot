@@ -1,10 +1,12 @@
 """
-Messages submenu for Eclipse RPG Automation (Phase 5).
+Messages submenu for Eclipse RPG Automation.
 
-Safety rule for this whole file: the site itself deletes
-messages IMMEDIATELY with no confirmation. Every destructive
-path here shows a preview of exactly what will be deleted and
-requires the user to type DELETE before anything happens.
+Safety rule:
+
+Eclipse RPG deletes messages immediately.
+
+Every destructive operation therefore requires the user to
+explicitly type DELETE before anything is removed.
 """
 
 from datetime import datetime, timedelta
@@ -17,38 +19,66 @@ from messages import (
     get_message_date,
     delete_messages,
     delete_all_messages,
+    delete_messages_older_than,
 )
 
 
+# ============================================================
+# DISPLAY HELPERS
+# ============================================================
+
 def _print_message_row(index, message):
 
-    subject = message["subject"] or "(no subject)"
-    sender = message["sender"] or "(unknown sender)"
-    date = message["date"] or "(unknown date)"
+    subject = (
+        message.get("subject")
+        or "(no subject)"
+    )
 
-    print(f"{index:3}. {subject}  —  {sender}  —  {date}")
+    sender = (
+        message.get("sender")
+        or "(unknown sender)"
+    )
+
+    date = (
+        message.get("date")
+        or "(unknown date)"
+    )
+
+    print(
+        f"{index:3}. "
+        f"{subject}  —  "
+        f"{sender}  —  "
+        f"{date}"
+    )
 
 
 def _confirm_delete(count, description):
-    """
-    Shared confirmation gate for every destructive path.
-
-    Returns True only if the user types DELETE exactly.
-    """
 
     print()
     print("=" * 60)
     print("CONFIRM DELETION")
     print("=" * 60)
     print()
-    print(f"You are about to delete {count} message(s).")
+
+    print(
+        f"You are about to delete {count} message(s)."
+    )
+
     print(description)
-    print()
-    print("This cannot be undone - Eclipse RPG deletes messages")
-    print("immediately, with no site-side confirmation.")
+
     print()
 
-    answer = input("Type DELETE to confirm, anything else to cancel: ").strip()
+    print(
+        "This cannot be undone - Eclipse RPG deletes "
+        "messages immediately."
+    )
+
+    print()
+
+    answer = input(
+        "Type DELETE to confirm, "
+        "anything else to cancel: "
+    ).strip()
 
     return answer == "DELETE"
 
@@ -63,66 +93,108 @@ def view_inbox(driver):
 
     while True:
 
-        open_inbox(driver, page=page)
+        if not open_inbox(
+            driver,
+            page=page,
+        ):
+            print("✗ Could not open inbox.")
+            return
 
         messages = get_messages_on_page(driver)
         total_pages = get_total_pages(driver)
 
         print()
         print("=" * 60)
-        print(f"INBOX  (page {page} of {total_pages})")
+        print(
+            f"INBOX  (page {page} of {total_pages})"
+        )
         print("=" * 60)
         print()
 
         if not messages:
             print("No messages on this page.")
 
-        for i, message in enumerate(messages, 1):
-            _print_message_row(i, message)
+        for i, message in enumerate(
+            messages,
+            1,
+        ):
+            _print_message_row(
+                i,
+                message,
+            )
 
         print()
         print("N. Next page")
         print("P. Previous page")
-        print("V. View a message's full text")
+        print("V. View message")
         print("B. Back")
 
-        choice = input("\nChoose: ").strip().lower()
+        choice = input(
+            "\nChoose: "
+        ).strip().lower()
 
         if choice == "n":
 
             if page < total_pages:
                 page += 1
             else:
-                print("Already on the last page.")
+                print(
+                    "Already on the last page."
+                )
 
         elif choice == "p":
 
             if page > 1:
                 page -= 1
             else:
-                print("Already on the first page.")
+                print(
+                    "Already on the first page."
+                )
 
         elif choice == "v":
 
-            number = input("Message number to view: ").strip()
+            number = input(
+                "Message number to view: "
+            ).strip()
 
             try:
                 index = int(number) - 1
                 message = messages[index]
 
-            except (ValueError, IndexError):
-                print("✗ Invalid message number.")
+            except (
+                ValueError,
+                IndexError,
+            ):
+                print(
+                    "✗ Invalid message number."
+                )
                 continue
 
             print()
             print("=" * 60)
-            print(message["subject"] or "(no subject)")
+            print(
+                message["subject"]
+                or "(no subject)"
+            )
             print("=" * 60)
-            print(f"From: {message['sender']}")
-            print(f"Date: {message['date']}")
+
+            print(
+                f"From: {message['sender']}"
+            )
+
+            print(
+                f"Date: {message['date']}"
+            )
+
             print()
-            print(message["body"] or "(no body found)")
-            input("\nPress Enter to continue...")
+            print(
+                message["body"]
+                or "(no body found)"
+            )
+
+            input(
+                "\nPress Enter to continue..."
+            )
 
         elif choice == "b":
             return
@@ -132,213 +204,481 @@ def view_inbox(driver):
 
 
 # ============================================================
-# DELETE MESSAGES
+# DELETE MENU
 # ============================================================
 
 def delete_messages_menu(driver):
 
     while True:
 
-        open_inbox(driver, page=1)
-
-        total_count = get_total_message_count(driver)
-        total_pages = get_total_pages(driver)
-
         print()
         print("=" * 60)
         print("DELETE MESSAGES")
         print("=" * 60)
         print()
-        print(f"Messages detected: {total_count}")
-        print(f"Pages: {total_pages}")
-        print()
+
         print("1. Delete ALL messages")
-        print("2. Delete current page")
-        print("3. Delete messages older than X days")
-        print("4. Delete selected messages (from current page)")
+        print("2. Delete messages older than X days")
+        print("3. Delete current page")
+        print("4. Delete selected messages")
         print("5. Back")
 
-        choice = input("\nChoose: ").strip()
+        choice = input(
+            "\nChoose: "
+        ).strip()
 
         if choice == "1":
-            _delete_all(driver, total_count)
+
+            _delete_all(driver)
 
         elif choice == "2":
-            _delete_current_page(driver)
 
-        elif choice == "3":
             _delete_older_than(driver)
 
+        elif choice == "3":
+
+            _delete_current_page(driver)
+
         elif choice == "4":
+
             _delete_selected(driver)
 
         elif choice == "5":
+
             return
 
         else:
+
             print("✗ Invalid choice.")
 
 
-def _delete_all(driver, total_count):
+# ============================================================
+# DELETE ALL
+# ============================================================
+
+def _delete_all(driver):
+
+    if not open_inbox(
+        driver,
+        page=1,
+    ):
+        print(
+            "\n✗ Could not open inbox."
+        )
+        return
+
+    total_count = get_total_message_count(
+        driver
+    )
 
     if total_count == 0:
-        print("\nInbox is already empty.")
-        input("\nPress Enter to continue...")
+
+        print(
+            "\nInbox is already empty."
+        )
+
+        input(
+            "\nPress Enter to continue..."
+        )
+
         return
+
+    print()
+    print(
+        f"Messages detected: {total_count}"
+    )
 
     if not _confirm_delete(
         total_count,
-        "This deletes every message in your inbox, across all pages.",
+        "This deletes every message in your inbox.",
     ):
+
         print("\nCancelled.")
-        return
-
-    print("\nDeleting... this may take a while for a large inbox.")
-
-    def progress(deleted_so_far):
-        print(f"  Deleted {deleted_so_far} so far...")
-
-    deleted = delete_all_messages(driver, progress_callback=progress)
-
-    print(f"\n✓ Deleted {deleted} message(s).")
-    input("\nPress Enter to continue...")
-
-
-def _delete_current_page(driver):
-
-    open_inbox(driver, page=1)
-    messages = get_messages_on_page(driver)
-
-    if not messages:
-        print("\nNo messages on this page.")
-        input("\nPress Enter to continue...")
         return
 
     print()
-    for i, message in enumerate(messages, 1):
-        _print_message_row(i, message)
+    print(
+        "Deleting all messages..."
+    )
 
-    if not _confirm_delete(
-        len(messages),
-        "This deletes every message shown above (page 1).",
+    def progress(
+        deleted,
+        page_count,
+        found,
     ):
-        print("\nCancelled.")
-        return
 
-    ids = [m["id"] for m in messages]
-    succeeded, failed = delete_messages(driver, ids)
+        print(
+            f"  ✓ Deleted {deleted} "
+            f"message(s) so far..."
+        )
 
-    print(f"\n✓ Deleted {succeeded} message(s).", end="")
+    deleted = delete_all_messages(
+        driver,
+        progress_callback=progress,
+    )
 
-    if failed:
-        print(f" ({failed} failed.)")
-    else:
-        print()
+    print()
+    print(
+        f"✓ Finished. Deleted "
+        f"{deleted} message(s)."
+    )
 
-    input("\nPress Enter to continue...")
+    input(
+        "\nPress Enter to continue..."
+    )
 
+
+# ============================================================
+# DELETE OLDER THAN X DAYS
+# ============================================================
 
 def _delete_older_than(driver):
 
-    answer = input("\nDelete messages older than how many days? ").strip()
+    answer = input(
+        "\nDelete messages older than how many days? "
+    ).strip()
 
     try:
+
         days = int(answer)
+
     except ValueError:
-        print("✗ Invalid number.")
+
+        print(
+            "✗ Invalid number."
+        )
+
         return
 
-    cutoff = datetime.now() - timedelta(days=days)
+    if days < 0:
 
-    print(f"\nScanning inbox for messages before {cutoff.date()}...")
+        print(
+            "✗ Number of days cannot be negative."
+        )
 
-    total_pages = get_total_pages(driver)
+        return
 
-    # Collect matching ids grouped by the page they were found
-    # on, since a message can only be deleted while its page
-    # is the one currently loaded.
-    matches_by_page = {}
-    total_matches = 0
+    cutoff = (
+        datetime.now()
+        - timedelta(days=days)
+    )
 
-    for page in range(1, total_pages + 1):
+    print()
+    print("=" * 60)
+    print("OLD MESSAGE CLEANUP")
+    print("=" * 60)
+    print()
 
-        open_inbox(driver, page=page)
-        messages = get_messages_on_page(driver)
+    print(
+        f"Delete messages older than: "
+        f"{days} day(s)"
+    )
 
-        page_matches = []
+    print(
+        f"Cutoff date: "
+        f"{cutoff.strftime('%B %d, %Y %I:%M %p')}"
+    )
+
+    print()
+    print(
+        "The inbox will be scanned dynamically."
+    )
+
+    print(
+        "Messages will be deleted in batches."
+    )
+
+    print(
+        "Pagination will be rechecked after "
+        "each deletion batch."
+    )
+
+    # --------------------------------------------------------
+    # PREVIEW
+    # --------------------------------------------------------
+
+    print()
+    print(
+        "Scanning inbox for a preview..."
+    )
+
+    total_pages = get_total_pages(
+        driver
+    )
+
+    preview_matches = []
+    preview_count = 0
+
+    for page in range(
+        1,
+        total_pages + 1,
+    ):
+
+        if not open_inbox(
+            driver,
+            page=page,
+        ):
+            continue
+
+        messages = get_messages_on_page(
+            driver
+        )
 
         for message in messages:
 
-            message_date = get_message_date(message)
+            message_date = get_message_date(
+                message
+            )
 
-            if message_date is not None and message_date < cutoff:
-                page_matches.append(message)
+            if (
+                message_date is not None
+                and message_date < cutoff
+            ):
 
-        if page_matches:
-            matches_by_page[page] = page_matches
-            total_matches += len(page_matches)
+                preview_count += 1
 
-    if total_matches == 0:
-        print(f"\nNo messages older than {days} day(s) found.")
-        input("\nPress Enter to continue...")
+                if len(preview_matches) < 25:
+                    preview_matches.append(
+                        message
+                    )
+
+    if preview_count == 0:
+
+        print()
+        print(
+            f"✓ No messages older than "
+            f"{days} day(s) were found."
+        )
+
+        input(
+            "\nPress Enter to continue..."
+        )
+
         return
 
-    print(f"\nFound {total_matches} message(s) older than {days} day(s):")
+    print()
+    print(
+        f"Found at least "
+        f"{preview_count} message(s) "
+        f"eligible for deletion."
+    )
+
     print()
 
-    shown = 0
+    for index, message in enumerate(
+        preview_matches,
+        1,
+    ):
 
-    for page, page_matches in matches_by_page.items():
+        _print_message_row(
+            index,
+            message,
+        )
 
-        for message in page_matches:
+    if preview_count > 25:
 
-            shown += 1
-            _print_message_row(shown, message)
+        print()
+        print(
+            f"... and "
+            f"{preview_count - 25} "
+            f"more."
+        )
 
-            if shown >= 25:
-                break
-
-        if shown >= 25:
-            break
-
-    if total_matches > 25:
-        print(f"  ... and {total_matches - 25} more.")
+    print()
 
     if not _confirm_delete(
-        total_matches,
-        f"This deletes every message older than {days} day(s), across all pages.",
+        preview_count,
+        (
+            f"This deletes every message "
+            f"older than {days} day(s), "
+            "across all inbox pages."
+        ),
     ):
+
         print("\nCancelled.")
         return
 
-    total_deleted = 0
+    # --------------------------------------------------------
+    # ACTUAL CLEANUP
+    # --------------------------------------------------------
 
-    for page, page_matches in matches_by_page.items():
+    print()
+    print("=" * 60)
+    print("STARTING CLEANUP")
+    print("=" * 60)
+    print()
 
-        open_inbox(driver, page=page)
+    print(
+        "The bot will continuously re-check "
+        "the inbox after deletions."
+    )
 
-        ids = [m["id"] for m in page_matches]
-        succeeded, _failed = delete_messages(driver, ids)
+    print()
 
-        total_deleted += succeeded
+    def progress(
+        deleted,
+        page,
+        found,
+        succeeded,
+        failed,
+    ):
 
-    print(f"\n✓ Deleted {total_deleted} message(s).")
-    input("\nPress Enter to continue...")
+        print(
+            f"Page {page}: "
+            f"found {found} old message(s) | "
+            f"deleted {succeeded} | "
+            f"failed {failed} | "
+            f"total deleted {deleted}"
+        )
+
+    deleted = delete_messages_older_than(
+        driver,
+        cutoff,
+        progress_callback=progress,
+    )
+
+    print()
+    print("=" * 60)
+    print("CLEANUP COMPLETE")
+    print("=" * 60)
+    print()
+
+    print(
+        f"✓ Messages deleted: {deleted}"
+    )
+
+    input(
+        "\nPress Enter to continue..."
+    )
 
 
-def _delete_selected(driver):
+# ============================================================
+# DELETE CURRENT PAGE
+# ============================================================
 
-    open_inbox(driver, page=1)
-    messages = get_messages_on_page(driver)
+def _delete_current_page(driver):
+
+    if not open_inbox(
+        driver,
+        page=1,
+    ):
+        print(
+            "\n✗ Could not open inbox."
+        )
+        return
+
+    messages = get_messages_on_page(
+        driver
+    )
 
     if not messages:
-        print("\nNo messages on this page.")
-        input("\nPress Enter to continue...")
+
+        print(
+            "\nNo messages on this page."
+        )
+
+        input(
+            "\nPress Enter to continue..."
+        )
+
         return
 
     print()
-    for i, message in enumerate(messages, 1):
-        _print_message_row(i, message)
+
+    for index, message in enumerate(
+        messages,
+        1,
+    ):
+
+        _print_message_row(
+            index,
+            message,
+        )
+
+    print()
+
+    if not _confirm_delete(
+        len(messages),
+        "This deletes every message shown above.",
+    ):
+
+        print("\nCancelled.")
+        return
+
+    ids = [
+        message["id"]
+        for message in messages
+    ]
+
+    succeeded, failed = delete_messages(
+        driver,
+        ids,
+    )
+
+    print()
+
+    print(
+        f"✓ Deleted {succeeded} message(s).",
+        end="",
+    )
+
+    if failed:
+
+        print(
+            f" {failed} failed."
+        )
+
+    else:
+
+        print()
+
+    input(
+        "\nPress Enter to continue..."
+    )
+
+
+# ============================================================
+# DELETE SELECTED
+# ============================================================
+
+def _delete_selected(driver):
+
+    if not open_inbox(
+        driver,
+        page=1,
+    ):
+        print(
+            "\n✗ Could not open inbox."
+        )
+        return
+
+    messages = get_messages_on_page(
+        driver
+    )
+
+    if not messages:
+
+        print(
+            "\nNo messages on this page."
+        )
+
+        input(
+            "\nPress Enter to continue..."
+        )
+
+        return
+
+    print()
+
+    for index, message in enumerate(
+        messages,
+        1,
+    ):
+
+        _print_message_row(
+            index,
+            message,
+        )
 
     answer = input(
         "\nEnter message numbers to delete "
@@ -346,7 +686,11 @@ def _delete_selected(driver):
     ).strip()
 
     if not answer:
-        print("✗ Nothing entered.")
+
+        print(
+            "✗ Nothing entered."
+        )
+
         return
 
     indexes = []
@@ -356,47 +700,94 @@ def _delete_selected(driver):
         part = part.strip()
 
         if not part.isdigit():
-            print(f"✗ Invalid entry: '{part}'")
+
+            print(
+                f"✗ Invalid entry: '{part}'"
+            )
+
             return
 
-        indexes.append(int(part))
+        indexes.append(
+            int(part)
+        )
 
     selected = []
 
     for index in indexes:
 
         if 1 <= index <= len(messages):
-            selected.append(messages[index - 1])
+
+            selected.append(
+                messages[index - 1]
+            )
+
         else:
-            print(f"✗ {index} is out of range.")
+
+            print(
+                f"✗ {index} is out of range."
+            )
+
             return
 
     if not selected:
-        print("✗ No valid messages selected.")
+
+        print(
+            "✗ No valid messages selected."
+        )
+
         return
 
     print()
-    for i, message in enumerate(selected, 1):
-        _print_message_row(i, message)
+    print("Messages selected:")
+
+    for index, message in enumerate(
+        selected,
+        1,
+    ):
+
+        _print_message_row(
+            index,
+            message,
+        )
 
     if not _confirm_delete(
         len(selected),
-        "This deletes exactly the message(s) listed above.",
+        "This deletes exactly the messages listed above.",
     ):
+
         print("\nCancelled.")
         return
 
-    ids = [m["id"] for m in selected]
-    succeeded, failed = delete_messages(driver, ids)
+    ids = [
+        message["id"]
+        for message in selected
+    ]
 
-    print(f"\n✓ Deleted {succeeded} message(s).", end="")
+    succeeded, failed = delete_messages(
+        driver,
+        ids,
+    )
+
+    print()
+
+    print(
+        f"✓ Deleted {succeeded} message(s).",
+        end="",
+    )
 
     if failed:
-        print(f" ({failed} failed.)")
+
+        print(
+            f" {failed} failed."
+        )
+
     else:
+
         print()
 
-    input("\nPress Enter to continue...")
+    input(
+        "\nPress Enter to continue..."
+    )
 
 
 # ============================================================
@@ -405,27 +796,55 @@ def _delete_selected(driver):
 
 def message_statistics(driver):
 
-    open_inbox(driver, page=1)
-
-    total_count = get_total_message_count(driver)
-    total_pages = get_total_pages(driver)
-
     print()
     print("=" * 60)
     print("MESSAGE STATISTICS")
     print("=" * 60)
     print()
-    print(f"Total messages: {total_count}")
-    print(f"Total pages:    {total_pages}")
 
-    input("\nPress Enter to return to the messages menu...")
+    print(
+        "Scanning inbox..."
+    )
+
+    total_count = get_total_message_count(
+        driver
+    )
+
+    if not open_inbox(
+        driver,
+        page=1,
+    ):
+        print(
+            "✗ Could not return to inbox."
+        )
+
+        return
+
+    total_pages = get_total_pages(
+        driver
+    )
+
+    print()
+    print(
+        f"Total messages: {total_count}"
+    )
+
+    print(
+        f"Total pages:    {total_pages}"
+    )
+
+    input(
+        "\nPress Enter to return to "
+        "the messages menu..."
+    )
 
 
 # ============================================================
-# MESSAGES MENU
+# MAIN MESSAGES MENU
 # ============================================================
 
 def messages_menu(driver):
+
     while True:
 
         print()
@@ -433,24 +852,34 @@ def messages_menu(driver):
         print("MESSAGES")
         print("=" * 60)
         print()
+
         print("1. View Inbox")
         print("2. Delete Messages")
         print("3. Message Statistics")
         print("4. Back")
 
-        choice = input("\nChoose: ").strip()
+        choice = input(
+            "\nChoose: "
+        ).strip()
 
         if choice == "1":
+
             view_inbox(driver)
 
         elif choice == "2":
+
             delete_messages_menu(driver)
 
         elif choice == "3":
+
             message_statistics(driver)
 
         elif choice == "4":
+
             return
 
         else:
-            print("✗ Invalid choice.")
+
+            print(
+                "✗ Invalid choice."
+        )
