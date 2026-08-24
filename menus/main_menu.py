@@ -12,11 +12,11 @@ clear "not yet implemented" stub and return to the menu, rather
 than pretending to do something they can't.
 """
 
-from training import train_mode
 from mining import miner_mode
 from trade import trade_mode
 from menus.search_menu import search_menu
 from menus.messages_menu import messages_menu
+from menus.training_menu import training_menu
 
 
 BANNER = r"""
@@ -75,7 +75,7 @@ def main_menu(driver):
         choice = input("Choose: ").strip()
 
         if choice == "1":
-            train_mode(driver)
+            training_menu(driver)
 
         elif choice == "2":
             search_menu(driver)

@@ -745,7 +745,10 @@ def click_restart_battle(driver):
 # TRAIN MODE
 # ============================================================
 
-def train_mode(driver):
+def train_mode(driver, max_battles=None):
+
+    if max_battles is None:
+        max_battles = MAX_BATTLES
 
     print()
     print("=" * 60)
@@ -769,7 +772,7 @@ def train_mode(driver):
             "✗ Could not start training battle."
         )
 
-        return
+        return 0
 
     print(
         "✓ First training battle started."
@@ -796,13 +799,13 @@ def train_mode(driver):
     #
     # ========================================================
 
-    while battle_count < MAX_BATTLES:
+    while battle_count < max_battles:
 
         print()
         print(
             f"=== Battle "
             f"{battle_count + 1}/"
-            f"{MAX_BATTLES} ==="
+            f"{max_battles} ==="
         )
 
         # ----------------------------------------------------
@@ -818,7 +821,7 @@ def train_mode(driver):
                 "✗ Battle timed out."
             )
 
-            return
+            return battle_count
 
         print(
             "  ✓ Battle finished."
@@ -840,7 +843,7 @@ def train_mode(driver):
         # Finished requested number of battles.
         # ----------------------------------------------------
 
-        if battle_count >= MAX_BATTLES:
+        if battle_count >= max_battles:
 
             break
 
@@ -871,7 +874,7 @@ def train_mode(driver):
                 "✗ Could not start next battle."
             )
 
-            return
+            return battle_count
 
         print(
             "  ✓ Next battle started."
@@ -890,3 +893,5 @@ def train_mode(driver):
         f"✓ Completed {battle_count} battles."
     )
     print("=" * 60)
+
+    return battle_count
