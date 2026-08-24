@@ -23,6 +23,14 @@ A running list of features, improvements, and automation ideas for the Eclipse R
 - [ ] Automatically choose the best training area.
 
 - [ ] Training progress statistics.
+(<table class="outcome">
+  <tbody><tr><td class="left_s"><img src="/images/icons/ShinyGastly.png"></td><td class="right_s"> </td></tr>
+  
+    <tr><td class="left_s">+<b>30</b> levels</td><td class="right_s">Lv. 9,530</td></tr>
+  <tr><td class="left_s">+<b>15381596</b> EXP</td><td class="right_s">273,596/505,160</td></tr><tr><td class="left_s">+<b>11</b> Happiness</td><td class="right_s">3138</td></tr>
+  
+  </tbody></table>)
+      
 
 - [ ] Resume training after an interruption.
 
