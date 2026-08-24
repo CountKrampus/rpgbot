@@ -35,6 +35,7 @@ A running list of features, improvements, and automation ideas for the Eclipse R
 - [ ] Resume training after an interruption.
 
 - [ ] Configurable battle preferences.
+- [ ] Be able to battle a user based on an inputted ID/Username
 
 🔎 Searching
 
