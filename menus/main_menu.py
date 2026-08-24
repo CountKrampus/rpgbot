@@ -16,6 +16,7 @@ from training import train_mode
 from mining import miner_mode
 from trade import trade_mode
 from menus.search_menu import search_menu
+from menus.messages_menu import messages_menu
 
 
 BANNER = r"""
@@ -86,7 +87,7 @@ def main_menu(driver):
             trade_mode(driver)
 
         elif choice == "5":
-            _not_yet_implemented("Messages")
+            messages_menu(driver)
 
         elif choice == "6":
             _not_yet_implemented("Shops")
