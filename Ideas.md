@@ -161,7 +161,7 @@ A running list of features, improvements, and automation ideas for the Eclipse R
 - [ ] Notification when a rare Pokémon is found.
 - [ ] Notification when a training target is reached.
 - [ ] Notification when an important task completes.
-
+- [ ] Add a break mode. (Acts as if taking a break for x amount of time (minutes))
 ---
 
 Priority
