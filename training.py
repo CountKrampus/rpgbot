@@ -1,3 +1,4 @@
+import re
 import time
 import random
 
@@ -20,18 +21,25 @@ from utils import (
 
 MAX_BATTLES = 100
 
+# Absolute safety limit for "battle until level".
+MAX_LEVEL_BATTLES = 10_000
+
 WAIT_LONG = 20
 BATTLE_END_TIMEOUT = 120
 
 BETWEEN_BATTLES_WAIT = (2.0, 3.0)
 
+# After clicking Fight/Attack, wait for the site's JavaScript
+# to process the attack.
+ATTACK_PROCESSING_WAIT = (0.8, 1.5)
+
+# Polling interval while waiting for battle state changes.
+BATTLE_POLL_WAIT = (0.35, 0.65)
+
 
 # ============================================================
 # BATTLE STATES
 # ============================================================
-
-# These are ALL valid names the site may use for the button
-# that starts the next battle.
 
 RESTART_STATES = {
     "restart",
@@ -39,10 +47,6 @@ RESTART_STATES = {
     "fight again",
     "restart battle",
 }
-
-
-# These are the states used while the Pokémon is actually
-# fighting.
 
 ATTACK_STATES = {
     "attack",
@@ -56,31 +60,13 @@ ATTACK_STATES = {
 
 def open_profile(driver):
 
-    print(
-        "Opening Your Profile..."
-    )
+    print("Opening Your Profile...")
 
     start = time.time()
 
     while time.time() - start < WAIT_LONG:
 
         try:
-
-            # ------------------------------------------------
-            # ACTUAL SITE STRUCTURE:
-            #
-            # <a href="/user?id=1102725">
-            #     Your Profile (#1102725)
-            # </a>
-            #
-            # We deliberately target the /user?id= link.
-            #
-            # DO NOT use a generic:
-            #
-            # //*[contains(., "Your Profile")]
-            #
-            # because that can hit unrelated page elements.
-            # ------------------------------------------------
 
             links = driver.find_elements(
                 By.XPATH,
@@ -92,31 +78,22 @@ def open_profile(driver):
                 try:
 
                     if not link.is_displayed():
-
                         continue
 
                     if not link.is_enabled():
-
                         continue
 
-                    text = normalize(
-                        link.text
-                    )
+                    text = normalize(link.text)
 
                     if "your profile" not in text:
-
                         continue
 
-                    href = link.get_attribute(
-                        "href"
-                    )
+                    href = link.get_attribute("href")
 
                     if not href:
-
                         continue
 
                     if "/user?id=" not in href:
-
                         continue
 
                     print(
@@ -124,24 +101,16 @@ def open_profile(driver):
                         f"'{link.text.strip()}'"
                     )
 
-                    if safe_click(
-                        driver,
-                        link
-                    ):
+                    if safe_click(driver, link):
 
                         print(
                             "  ✓ Your Profile clicked."
                         )
 
-                        wait_for_document_ready(
-                            driver
-                        )
+                        wait_for_document_ready(driver)
 
                         time.sleep(
-                            random.uniform(
-                                0.8,
-                                1.5
-                            )
+                            random.uniform(0.8, 1.5)
                         )
 
                         print(
@@ -176,27 +145,13 @@ def open_profile(driver):
 
 def open_party(driver):
 
-    print(
-        "Opening Party..."
-    )
+    print("Opening Party...")
 
     start = time.time()
 
     while time.time() - start < WAIT_LONG:
 
         try:
-
-            # ------------------------------------------------
-            # ACTUAL SITE STRUCTURE:
-            #
-            # <span id="VP_PartyLink1"
-            #       onclick="...set_profile_tab('Party',0);">
-            #
-            # We target this EXACT element.
-            #
-            # This prevents generic "Party" searches from
-            # accidentally selecting an advertisement.
-            # ------------------------------------------------
 
             party_elements = driver.find_elements(
                 By.ID,
@@ -208,31 +163,23 @@ def open_party(driver):
                 try:
 
                     if not party.is_displayed():
-
                         continue
 
                     if not party.is_enabled():
-
                         continue
 
                     print(
                         "  ✓ Party tab found."
                     )
 
-                    if safe_click(
-                        driver,
-                        party
-                    ):
+                    if safe_click(driver, party):
 
                         print(
                             "  ✓ Party clicked."
                         )
 
                         time.sleep(
-                            random.uniform(
-                                0.8,
-                                1.5
-                            )
+                            random.uniform(0.8, 1.5)
                         )
 
                         return True
@@ -273,24 +220,6 @@ def click_first_party_fight(driver):
 
         try:
 
-            # ------------------------------------------------
-            # Actual party Fight links look like:
-            #
-            # <a class="inputsubmit"
-            #    href="/create_battle?...">
-            #    Fight
-            # </a>
-            #
-            # We require ALL of the following:
-            #
-            # 1. <a>
-            # 2. class contains inputsubmit
-            # 3. exact visible text = Fight
-            # 4. href contains create_battle
-            #
-            # This keeps ads and unrelated links out.
-            # ------------------------------------------------
-
             fights = driver.find_elements(
                 By.XPATH,
                 "//a["
@@ -309,28 +238,20 @@ def click_first_party_fight(driver):
                 try:
 
                     if not fight.is_displayed():
-
                         continue
 
                     if not fight.is_enabled():
-
                         continue
 
-                    href = fight.get_attribute(
-                        "href"
-                    )
+                    href = fight.get_attribute("href")
 
                     if not href:
-
                         continue
 
                     if "create_battle" not in href:
-
                         continue
 
-                    valid_fights.append(
-                        fight
-                    )
+                    valid_fights.append(fight)
 
                 except (
                     StaleElementReferenceException,
@@ -347,24 +268,22 @@ def click_first_party_fight(driver):
                     f"valid Fight button(s)."
                 )
 
-                # Always use the first Pokémon.
                 fight = valid_fights[0]
 
                 print(
                     "  Clicking first Pokémon Fight..."
                 )
 
-                if safe_click(
-                    driver,
-                    fight
-                ):
+                if safe_click(driver, fight):
 
                     print(
                         "  ✓ First Fight clicked."
                     )
 
-                    wait_for_document_ready(
-                        driver
+                    wait_for_document_ready(driver)
+
+                    time.sleep(
+                        random.uniform(0.8, 1.5)
                     )
 
                     return True
@@ -393,29 +312,13 @@ def start_training_battle(driver):
         "Starting new training battle..."
     )
 
-    # --------------------------------------------------------
-    # THIS FUNCTION SHOULD ONLY BE CALLED ONCE PER TRAIN MODE
-    # SESSION.
-    #
-    # Profile -> Party -> First Fight
-    # --------------------------------------------------------
-
-    if not open_profile(
-        driver
-    ):
-
+    if not open_profile(driver):
         return False
 
-    if not open_party(
-        driver
-    ):
-
+    if not open_party(driver):
         return False
 
-    if not click_first_party_fight(
-        driver
-    ):
-
+    if not click_first_party_fight(driver):
         return False
 
     print(
@@ -443,11 +346,9 @@ def get_battle_button(driver):
             try:
 
                 if not button.is_displayed():
-
                     continue
 
                 if not button.is_enabled():
-
                     continue
 
                 return button
@@ -472,12 +373,9 @@ def get_battle_button(driver):
 
 def get_battle_button_text(driver):
 
-    button = get_battle_button(
-        driver
-    )
+    button = get_battle_button(driver)
 
     if button is None:
-
         return ""
 
     try:
@@ -495,16 +393,259 @@ def get_battle_button_text(driver):
 
 
 # ============================================================
+# GET CURRENT LEVEL FROM BATTLE PAGE
+# ============================================================
+
+def get_current_battle_level(driver):
+
+    """
+    Read the player's current level from the battle page.
+
+    Real Eclipse RPG structure:
+
+        <td class="tnav_battle" align="center" width="100%">
+            Level <b>10135</b>
+        </td>
+
+    We intentionally read the visible text and extract the
+    number following the word "Level".
+
+    This is the authoritative level source for training.
+    """
+
+    try:
+
+        elements = driver.find_elements(
+            By.CSS_SELECTOR,
+            "td.tnav_battle"
+        )
+
+        for element in elements:
+
+            try:
+
+                if not element.is_displayed():
+                    continue
+
+                text = element.get_attribute(
+                    "textContent"
+                ) or ""
+
+                text = normalize(text)
+
+                match = re.search(
+                    r"\bLevel\s+([\d,]+)\b",
+                    text,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    return int(
+                        match.group(1).replace(",", "")
+                    )
+
+            except (
+                StaleElementReferenceException,
+                WebDriverException,
+            ):
+
+                continue
+
+    except WebDriverException:
+
+        pass
+
+    return None
+
+
+# ============================================================
+# WAIT FOR CURRENT LEVEL
+# ============================================================
+
+def wait_for_current_level(
+    driver,
+    timeout=WAIT_LONG,
+):
+
+    start = time.time()
+
+    while time.time() - start < timeout:
+
+        level = get_current_battle_level(driver)
+
+        if level is not None:
+
+            return level
+
+        time.sleep(0.3)
+
+    return None
+
+
+# ============================================================
+# GET BATTLE RESULT LEVEL GAIN
+# ============================================================
+
+def get_battle_level_gain(driver):
+
+    """
+    Read the level gain from Battle Results.
+
+    Example:
+
+        +30 levels
+        Lv. 10,045
+    """
+
+    try:
+
+        elements = driver.find_elements(
+            By.CSS_SELECTOR,
+            "td.tnav_battle"
+        )
+
+        for element in elements:
+
+            try:
+
+                text = element.get_attribute(
+                    "textContent"
+                ) or ""
+
+                text = normalize(text)
+
+                match = re.search(
+                    r"\+([\d,]+)\s+levels?",
+                    text,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    return int(
+                        match.group(1).replace(",", "")
+                    )
+
+            except (
+                StaleElementReferenceException,
+                WebDriverException,
+            ):
+
+                continue
+
+    except WebDriverException:
+
+        pass
+
+    return None
+
+
+# ============================================================
+# GET EXP GAIN
+# ============================================================
+
+def get_battle_exp_gain(driver):
+
+    """
+    Read:
+
+        +16209694 EXP
+
+    from Battle Results.
+    """
+
+    try:
+
+        elements = driver.find_elements(
+            By.CSS_SELECTOR,
+            "td.tnav_battle"
+        )
+
+        for element in elements:
+
+            try:
+
+                text = element.get_attribute(
+                    "textContent"
+                ) or ""
+
+                text = normalize(text)
+
+                match = re.search(
+                    r"\+([\d,]+)\s+EXP\b",
+                    text,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    return int(
+                        match.group(1).replace(",", "")
+                    )
+
+            except (
+                StaleElementReferenceException,
+                WebDriverException,
+            ):
+
+                continue
+
+    except WebDriverException:
+
+        pass
+
+    return None
+
+
+# ============================================================
 # CHECK FOR BATTLE COMPLETION
 # ============================================================
 
 def battle_has_ended(driver):
 
-    state = get_battle_button_text(
-        driver
-    )
+    state = get_battle_button_text(driver)
 
     return state in RESTART_STATES
+
+
+# ============================================================
+# WAIT FOR ATTACK PROCESSING
+# ============================================================
+
+def wait_for_attack_processing(driver):
+
+    """
+    Prevent duplicate attacks.
+
+    The site can temporarily leave #battlebtn showing
+    Fight/Attack after the click has already been accepted.
+    """
+
+    start = time.time()
+
+    initial_state = get_battle_button_text(driver)
+
+    while time.time() - start < 8:
+
+        current_state = get_battle_button_text(driver)
+
+        if not current_state:
+
+            return True
+
+        if current_state != initial_state:
+
+            return True
+
+        time.sleep(
+            random.uniform(
+                0.25,
+                0.45
+            )
+        )
+
+    return True
 
 
 # ============================================================
@@ -513,9 +654,7 @@ def battle_has_ended(driver):
 
 def click_attack(driver):
 
-    button = get_battle_button(
-        driver
-    )
+    button = get_battle_button(driver)
 
     if button is None:
 
@@ -536,13 +675,21 @@ def click_attack(driver):
             f"'{button.text.strip()}'..."
         )
 
-        if safe_click(
-            driver,
-            button
-        ):
+        if safe_click(driver, button):
 
             print(
                 "  ✓ Attack/Fight clicked."
+            )
+
+            time.sleep(
+                random.uniform(
+                    ATTACK_PROCESSING_WAIT[0],
+                    ATTACK_PROCESSING_WAIT[1]
+                )
+            )
+
+            wait_for_attack_processing(
+                driver
             )
 
             return True
@@ -576,9 +723,7 @@ def wait_for_battle_to_finish(driver):
         < BATTLE_END_TIMEOUT
     ):
 
-        button = get_battle_button(
-            driver
-        )
+        button = get_battle_button(driver)
 
         if button is None:
 
@@ -599,10 +744,6 @@ def wait_for_battle_to_finish(driver):
 
             continue
 
-        # ----------------------------------------------------
-        # Only print when the button state changes.
-        # ----------------------------------------------------
-
         if state != last_state:
 
             print(
@@ -612,44 +753,27 @@ def wait_for_battle_to_finish(driver):
 
             last_state = state
 
-        # ----------------------------------------------------
-        # BATTLE FINISHED
-        #
-        # Valid examples:
-        #
-        # Restart
-        # Battle Again
-        # Fight Again
-        # Restart Battle
-        # ----------------------------------------------------
-
         if state in RESTART_STATES:
 
             return True
 
-        # ----------------------------------------------------
-        # ATTACK
-        # ----------------------------------------------------
-
         if state in ATTACK_STATES:
 
-            click_attack(
-                driver
-            )
+            if not click_attack(driver):
 
-            time.sleep(
-                random.uniform(
-                    0.7,
-                    1.2
+                time.sleep(
+                    random.uniform(
+                        0.4,
+                        0.7
+                    )
                 )
-            )
 
             continue
 
         time.sleep(
             random.uniform(
-                0.4,
-                0.8
+                BATTLE_POLL_WAIT[0],
+                BATTLE_POLL_WAIT[1]
             )
         )
 
@@ -670,9 +794,7 @@ def click_restart_battle(driver):
 
     while time.time() - start < WAIT_LONG:
 
-        button = get_battle_button(
-            driver
-        )
+        button = get_battle_button(driver)
 
         if button is not None:
 
@@ -681,20 +803,6 @@ def click_restart_battle(driver):
                 state = normalize(
                     button.text
                 )
-
-                # ------------------------------------------------
-                # IMPORTANT:
-                #
-                # Only click #battlebtn.
-                #
-                # NEVER search the entire page for:
-                #
-                # "Restart"
-                # "Battle Again"
-                # "Fight Again"
-                #
-                # because advertisements can contain those words.
-                # ------------------------------------------------
 
                 if state in RESTART_STATES:
 
@@ -711,9 +819,6 @@ def click_restart_battle(driver):
                         print(
                             "  ✓ Next battle button clicked."
                         )
-
-                        # Wait briefly for the new battle
-                        # state to appear.
 
                         time.sleep(
                             random.uniform(
@@ -742,30 +847,445 @@ def click_restart_battle(driver):
 
 
 # ============================================================
-# TRAIN MODE
+# DISPLAY TRAINING PROGRESS
 # ============================================================
 
-def train_mode(driver, max_battles=None):
+def print_training_progress(
+    current_level,
+    target_level,
+    last_level_gain=None,
+    total_exp_gained=0,
+):
 
-    if max_battles is None:
-        max_battles = MAX_BATTLES
+    print()
+
+    if current_level is None:
+
+        print(
+            f"Progress: "
+            f"Unknown/{target_level:,}"
+        )
+
+        return
+
+    remaining = max(
+        0,
+        target_level - current_level
+    )
+
+    print(
+        f"Progress: "
+        f"{current_level:,}/"
+        f"{target_level:,}"
+    )
+
+    print(
+        f"Levels remaining: "
+        f"{remaining:,}"
+    )
+
+    if last_level_gain is not None:
+
+        print(
+            f"Last battle: "
+            f"+{last_level_gain:,} levels"
+        )
+
+    if total_exp_gained:
+
+        print(
+            f"Total EXP gained: "
+            f"{total_exp_gained:,}"
+        )
+
+
+# ============================================================
+# BATTLE UNTIL TARGET LEVEL
+# ============================================================
+
+def train_until_level(
+    driver,
+    target_level,
+    max_battles=MAX_LEVEL_BATTLES,
+):
+
+    print()
+    print("=" * 60)
+    print("TRAIN UNTIL LEVEL")
+    print("=" * 60)
+    print()
+
+    print(
+        f"Target level: {target_level:,}"
+    )
+
+    print(
+        f"Safety limit: {max_battles:,} battles"
+    )
+
+    # --------------------------------------------------------
+    # Validate target.
+    # --------------------------------------------------------
+
+    if target_level <= 0:
+
+        print(
+            "✗ Target level must be greater than 0."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": None,
+            "target_level": target_level,
+            "exp_gained": 0,
+        }
+
+    # --------------------------------------------------------
+    # Start initial battle.
+    # --------------------------------------------------------
+
+    if not start_training_battle(driver):
+
+        print()
+        print(
+            "✗ Could not start training battle."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": None,
+            "target_level": target_level,
+            "exp_gained": 0,
+        }
+
+    # --------------------------------------------------------
+    # Read the actual level from the battle page.
+    # --------------------------------------------------------
+
+    current_level = wait_for_current_level(
+        driver
+    )
+
+    if current_level is None:
+
+        print()
+        print(
+            "✗ Could not determine current level."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": None,
+            "target_level": target_level,
+            "exp_gained": 0,
+        }
+
+    print()
+    print(
+        f"✓ Current level: "
+        f"{current_level:,}"
+    )
+
+    # --------------------------------------------------------
+    # Already at target.
+    # --------------------------------------------------------
+
+    if current_level >= target_level:
+
+        print()
+        print(
+            f"✓ Target level already reached."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": current_level,
+            "target_level": target_level,
+            "exp_gained": 0,
+        }
+
+    battle_count = 0
+    total_exp_gained = 0
+    last_level_gain = None
+
+    # ========================================================
+    # MAIN LEVEL TRAINING LOOP
+    # ========================================================
+
+    while battle_count < max_battles:
+
+        print_training_progress(
+            current_level,
+            target_level,
+            last_level_gain,
+            total_exp_gained,
+        )
+
+        print()
+        print(
+            f"=== Battle "
+            f"{battle_count + 1}/"
+            f"{max_battles:,} safety limit ==="
+        )
+
+        # ----------------------------------------------------
+        # Complete current battle.
+        # ----------------------------------------------------
+
+        if not wait_for_battle_to_finish(driver):
+
+            print()
+            print(
+                "✗ Battle timed out."
+            )
+
+            return {
+                "battles": battle_count,
+                "current_level": current_level,
+                "target_level": target_level,
+                "exp_gained": total_exp_gained,
+            }
+
+        print(
+            "  ✓ Battle finished."
+        )
+
+        # ----------------------------------------------------
+        # Read battle results BEFORE clicking Restart Battle.
+        #
+        # The result page contains:
+        #
+        # +30 levels
+        # +16209694 EXP
+        #
+        # and the current level.
+        # ----------------------------------------------------
+
+        level_gain = get_battle_level_gain(
+            driver
+        )
+
+        exp_gain = get_battle_exp_gain(
+            driver
+        )
+
+        if level_gain is not None:
+
+            last_level_gain = level_gain
+
+            print(
+                f"  Levels gained: "
+                f"+{level_gain:,}"
+            )
+
+        if exp_gain is not None:
+
+            total_exp_gained += exp_gain
+
+            print(
+                f"  EXP gained: "
+                f"+{exp_gain:,}"
+            )
+
+        # ----------------------------------------------------
+        # IMPORTANT:
+        #
+        # Read the authoritative level from:
+        #
+        # <td class="tnav_battle">
+        #     Level <b>10135</b>
+        # </td>
+        #
+        # This happens AFTER the battle result has been
+        # processed.
+        # ----------------------------------------------------
+
+        updated_level = wait_for_current_level(
+            driver,
+            timeout=10,
+        )
+
+        if updated_level is not None:
+
+            current_level = updated_level
+
+            print(
+                f"  Current level: "
+                f"{current_level:,}/"
+                f"{target_level:,}"
+            )
+
+        else:
+
+            # ------------------------------------------------
+            # If the level isn't readable, use the known level
+            # gain as a fallback rather than falsely claiming
+            # the old level is current.
+            # ------------------------------------------------
+
+            if (
+                current_level is not None
+                and level_gain is not None
+            ):
+
+                current_level += level_gain
+
+                print(
+                    f"  Current level estimated from "
+                    f"battle result: "
+                    f"{current_level:,}/"
+                    f"{target_level:,}"
+                )
+
+            else:
+
+                print(
+                    "  ⚠ Could not determine updated level."
+                )
+
+        battle_count += 1
+
+        print()
+        print(
+            f"✓ Battle "
+            f"{battle_count} complete!"
+        )
+
+        # ----------------------------------------------------
+        # TARGET REACHED
+        #
+        # Check immediately BEFORE starting another battle.
+        # ----------------------------------------------------
+
+        if (
+            current_level is not None
+            and current_level >= target_level
+        ):
+
+            print()
+            print(
+                "=" * 60
+            )
+
+            print(
+                f"✓ TARGET LEVEL REACHED!"
+            )
+
+            print(
+                f"  Current level: "
+                f"{current_level:,}"
+            )
+
+            print(
+                f"  Target level:  "
+                f"{target_level:,}"
+            )
+
+            print(
+                f"  Battles completed: "
+                f"{battle_count}"
+            )
+
+            print(
+                f"  Total EXP gained: "
+                f"{total_exp_gained:,}"
+            )
+
+            print(
+                "=" * 60
+            )
+
+            return {
+                "battles": battle_count,
+                "current_level": current_level,
+                "target_level": target_level,
+                "exp_gained": total_exp_gained,
+            }
+
+        # ----------------------------------------------------
+        # Safety limit reached.
+        # ----------------------------------------------------
+
+        if battle_count >= max_battles:
+
+            print()
+            print(
+                "⚠ Training stopped because the "
+                "battle safety limit was reached."
+            )
+
+            return {
+                "battles": battle_count,
+                "current_level": current_level,
+                "target_level": target_level,
+                "exp_gained": total_exp_gained,
+            }
+
+        # ----------------------------------------------------
+        # Start next battle.
+        # ----------------------------------------------------
+
+        print(
+            "  Preparing next battle..."
+        )
+
+        if not click_restart_battle(driver):
+
+            print()
+            print(
+                "✗ Could not start next battle."
+            )
+
+            return {
+                "battles": battle_count,
+                "current_level": current_level,
+                "target_level": target_level,
+                "exp_gained": total_exp_gained,
+            }
+
+        print(
+            "  ✓ Next battle started."
+        )
+
+        time.sleep(
+            random.uniform(
+                BETWEEN_BATTLES_WAIT[0],
+                BETWEEN_BATTLES_WAIT[1]
+            )
+        )
+
+    return {
+        "battles": battle_count,
+        "current_level": current_level,
+        "target_level": target_level,
+        "exp_gained": total_exp_gained,
+    }
+
+
+# ============================================================
+# TRAIN FOR X BATTLES
+# ============================================================
+
+def train_for_battles(
+    driver,
+    max_battles=MAX_BATTLES,
+):
 
     print()
     print("=" * 60)
     print("TRAIN MODE")
     print("=" * 60)
 
-    # ========================================================
-    # INITIAL BATTLE
-    #
-    # Profile -> Party -> First Fight
-    #
-    # THIS HAPPENS ONLY ONCE.
-    # ========================================================
+    print()
+    print(
+        f"Battle limit: {max_battles:,}"
+    )
 
-    if not start_training_battle(
-        driver
-    ):
+    # --------------------------------------------------------
+    # Start first battle.
+    # --------------------------------------------------------
+
+    if not start_training_battle(driver):
 
         print()
         print(
@@ -774,29 +1294,10 @@ def train_mode(driver, max_battles=None):
 
         return 0
 
-    print(
-        "✓ First training battle started."
-    )
-
     battle_count = 0
 
     # ========================================================
     # BATTLE LOOP
-    #
-    # From this point forward:
-    #
-    # NEVER:
-    #
-    #   Profile -> Party -> Fight
-    #
-    # Instead:
-    #
-    #   Finish battle
-    #        ↓
-    #   Restart / Battle Again / Fight Again
-    #        ↓
-    #   Next battle
-    #
     # ========================================================
 
     while battle_count < max_battles:
@@ -805,16 +1306,14 @@ def train_mode(driver, max_battles=None):
         print(
             f"=== Battle "
             f"{battle_count + 1}/"
-            f"{max_battles} ==="
+            f"{max_battles:,} ==="
         )
 
         # ----------------------------------------------------
-        # Fight the current battle.
+        # Fight current battle.
         # ----------------------------------------------------
 
-        if not wait_for_battle_to_finish(
-            driver
-        ):
+        if not wait_for_battle_to_finish(driver):
 
             print()
             print(
@@ -828,8 +1327,16 @@ def train_mode(driver, max_battles=None):
         )
 
         # ----------------------------------------------------
-        # Count the completed battle.
+        # Collect battle statistics.
         # ----------------------------------------------------
+
+        level_gain = get_battle_level_gain(
+            driver
+        )
+
+        exp_gain = get_battle_exp_gain(
+            driver
+        )
 
         battle_count += 1
 
@@ -839,8 +1346,22 @@ def train_mode(driver, max_battles=None):
             f"{battle_count} complete!"
         )
 
+        if level_gain is not None:
+
+            print(
+                f"  Levels gained: "
+                f"+{level_gain:,}"
+            )
+
+        if exp_gain is not None:
+
+            print(
+                f"  EXP gained: "
+                f"+{exp_gain:,}"
+            )
+
         # ----------------------------------------------------
-        # Finished requested number of battles.
+        # Requested number completed.
         # ----------------------------------------------------
 
         if battle_count >= max_battles:
@@ -848,26 +1369,14 @@ def train_mode(driver, max_battles=None):
             break
 
         # ----------------------------------------------------
-        # DO NOT OPEN PROFILE.
-        #
-        # DO NOT OPEN PARTY.
-        #
-        # DO NOT CLICK THE FIRST FIGHT LINK AGAIN.
-        #
-        # Click the battle page's:
-        #
-        # Restart
-        # Battle Again
-        # Fight Again
+        # Restart the battle directly.
         # ----------------------------------------------------
 
         print(
             "  Preparing next battle..."
         )
 
-        if not click_restart_battle(
-            driver
-        ):
+        if not click_restart_battle(driver):
 
             print()
             print(
@@ -889,9 +1398,63 @@ def train_mode(driver, max_battles=None):
 
     print()
     print("=" * 60)
+
     print(
-        f"✓ Completed {battle_count} battles."
+        f"✓ Completed "
+        f"{battle_count:,} battles."
     )
-    print("=" * 60)
+
+    print(
+        "=" * 60
+    )
 
     return battle_count
+
+
+# ============================================================
+# MAIN TRAINING ENTRY POINT
+# ============================================================
+
+def train_mode(
+    driver,
+    max_battles=MAX_BATTLES,
+    target_level=None,
+):
+
+    """
+    Main training entry point.
+
+    Two modes are supported:
+
+        train_mode(driver, max_battles=100)
+            -> Battle for a fixed number of battles.
+
+        train_mode(
+            driver,
+            max_battles=10000,
+            target_level=10235
+        )
+            -> Battle until the Pokémon reaches level 10235,
+               with the battle count acting as a safety limit.
+    """
+
+    # --------------------------------------------------------
+    # LEVEL TARGET MODE
+    # --------------------------------------------------------
+
+    if target_level is not None:
+
+        return train_until_level(
+            driver,
+            target_level=target_level,
+            max_battles=max_battles,
+        )
+
+    # --------------------------------------------------------
+    # NORMAL BATTLE COUNT MODE
+    # --------------------------------------------------------
+
+    return train_for_battles(
+        driver,
+        max_battles=max_battles,
+    )

@@ -21,15 +21,8 @@ WAIT_LONG = 20
 
 
 # ============================================================
-# CAPTURE PREFERENCES (Phase 4)
+# CAPTURE PREFERENCES
 # ============================================================
-#
-# Ball priority order. select_best_ball() picks the first ball
-# in this list that's actually available; if none of the
-# preferred balls are available it falls back to whatever ball
-# IS available. Pulled out to a constant here (instead of being
-# inline in select_best_ball) so it can be wired up to Settings
-# in a later phase without touching the selection logic itself.
 
 PREFERRED_BALL_ORDER = [
     "Ultra Ball",
@@ -243,7 +236,6 @@ def get_available_balls(driver):
 
                 lowered = normalize(alt)
 
-                # Only accept actual Poké Balls.
                 if (
                     "pokeball" in lowered
                     or "great ball" in lowered
@@ -285,15 +277,6 @@ def get_available_balls(driver):
 
 
 def has_usable_ball(driver):
-    """
-    Phase 4 - inventory awareness.
-
-    Quick check for whether at least one usable Poke Ball is
-    currently available, without going through the full
-    select_best_ball() polling/selection flow. Used to stop an
-    encounter cleanly instead of burning capture attempts when
-    the account genuinely has no balls left.
-    """
 
     return bool(
         get_available_balls(
@@ -323,15 +306,9 @@ def select_best_ball(driver):
                 + ", ".join(balls)
             )
 
-            # ----------------------------------------------------
-            # Prefer the strongest commonly available ball.
-            # ----------------------------------------------------
-
-            preferred = PREFERRED_BALL_ORDER
-
             selected = None
 
-            for wanted in preferred:
+            for wanted in PREFERRED_BALL_ORDER:
 
                 for ball in balls:
 
@@ -345,11 +322,6 @@ def select_best_ball(driver):
                 if selected:
                     break
 
-            # ----------------------------------------------------
-            # If none of the preferred balls exists, use the
-            # first available ball.
-            # ----------------------------------------------------
-
             if not selected:
 
                 selected = balls[0]
@@ -357,19 +329,6 @@ def select_best_ball(driver):
             print(
                 f"  Selecting {selected}..."
             )
-
-            # ----------------------------------------------------
-            # IMPORTANT:
-            #
-            # Eclipse RPG uses:
-            #
-            # <span onclick="item_choice(3803194);">
-            #     <img src="/images/items/ultra_ball.png"
-            #          alt="Ultra Ball">
-            # </span>
-            #
-            # So we click the SPAN, not the image.
-            # ----------------------------------------------------
 
             try:
 
@@ -382,9 +341,7 @@ def select_best_ball(driver):
 
                     try:
 
-                        if not (
-                            element.is_displayed()
-                        ):
+                        if not element.is_displayed():
                             continue
 
                         image = element.find_element(
@@ -433,9 +390,7 @@ def select_best_ball(driver):
                     f"  ⚠ Ball selection error: {e}"
                 )
 
-        time.sleep(
-            0.3
-        )
+        time.sleep(0.3)
 
     print(
         "  ✗ No usable Poké Ball found."
@@ -445,12 +400,45 @@ def select_best_ball(driver):
 
 
 # ============================================================
-# ATTACK
+# ATTACK / FIGHT
 # ============================================================
 
 def find_attack_button(driver):
 
+    """
+    Eclipse RPG can use either "Attack" or "Fight"
+    depending on the battle page.
+
+    The current battle page also provides:
+
+        <button id="battlebtn" ...>
+            <img ...>
+            Fight
+        </button>
+
+    #battlebtn is therefore the most reliable selector.
+    """
+
     selectors = [
+
+        # ----------------------------------------------------
+        # BEST / MOST RELIABLE:
+        # Eclipse RPG battle button.
+        # ----------------------------------------------------
+
+        (
+            By.ID,
+            "battlebtn"
+        ),
+
+        (
+            By.CSS_SELECTOR,
+            "button#battlebtn"
+        ),
+
+        # ----------------------------------------------------
+        # Attack
+        # ----------------------------------------------------
 
         (
             By.XPATH,
@@ -467,13 +455,40 @@ def find_attack_button(driver):
             "//a[normalize-space()='Attack']"
         ),
 
+        # ----------------------------------------------------
+        # Fight
+        # ----------------------------------------------------
+
+        (
+            By.XPATH,
+            "//input[@value='Fight']"
+        ),
+
+        (
+            By.XPATH,
+            "//button[normalize-space()='Fight']"
+        ),
+
+        (
+            By.XPATH,
+            "//a[normalize-space()='Fight']"
+        ),
+
+        # ----------------------------------------------------
+        # Generic Attack/Fight fallback.
+        # ----------------------------------------------------
+
         (
             By.XPATH,
             "//*[self::input or self::button or self::a]"
             "[contains(translate(normalize-space(.),"
             "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
             "'abcdefghijklmnopqrstuvwxyz'),"
-            "'attack')]"
+            "'attack') "
+            "or contains(translate(normalize-space(.),"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
+            "'abcdefghijklmnopqrstuvwxyz'),"
+            "'fight')]"
         ),
 
     ]
@@ -498,7 +513,7 @@ def click_attack(driver):
     if not button:
 
         print(
-            "  ✗ Attack button not found."
+            "  ✗ Attack/Fight button not found."
         )
 
         return False
@@ -514,6 +529,10 @@ def click_attack(driver):
                 or ""
             ).strip()
         )
+
+        if not text:
+
+            text = "Attack/Fight"
 
         print(
             f"  Battle button: '{text}'"
@@ -536,6 +555,10 @@ def click_attack(driver):
     ):
 
         pass
+
+    print(
+        "  ✗ Could not click Attack/Fight."
+    )
 
     return False
 
@@ -715,23 +738,6 @@ def click_use_another(driver):
 
 def find_capture_continue(driver):
 
-    """
-    Find the Continue control shown after a
-    successful capture.
-
-    IMPORTANT:
-
-    We do NOT hardcode an area_id.
-
-    Examples:
-
-        legendary_areas?area_id=3#search
-        legendary_areas?area_id=12#search
-        legendary_areas?area_id=17#search
-
-    All of these must work.
-    """
-
     selectors = [
 
         (
@@ -795,25 +801,12 @@ def find_capture_continue(driver):
                         )
                     )
 
-                    # ------------------------------------------------
-                    # Best match:
-                    #
-                    # Continue button whose JavaScript returns
-                    # to legendary_areas.
-                    #
-                    # DO NOT check area_id.
-                    # ------------------------------------------------
-
                     if (
                         "legendary_areas" in onclick
                         and "document.location" in onclick
                     ):
 
                         return button
-
-                    # ------------------------------------------------
-                    # Generic Continue fallback.
-                    # ------------------------------------------------
 
                     if (
                         text == "continue"
@@ -878,11 +871,6 @@ def click_capture_continue(driver):
                         "  ✓ Continue clicked."
                     )
 
-                    # ------------------------------------------------
-                    # Wait for navigation back to the legendary
-                    # area.
-                    # ------------------------------------------------
-
                     navigation_start = time.time()
 
                     while (
@@ -921,18 +909,12 @@ def click_capture_continue(driver):
 
                             pass
 
-                        time.sleep(
-                            0.3
-                        )
-
-                    # ------------------------------------------------
-                    # Click happened successfully even if URL
-                    # verification timed out.
-                    # ------------------------------------------------
+                        time.sleep(0.3)
 
                     print(
                         "  ⚠ Continue was clicked, "
-                        "but navigation could not be verified."
+                        "but navigation could not "
+                        "be verified."
                     )
 
                     return True
@@ -944,9 +926,7 @@ def click_capture_continue(driver):
 
                 pass
 
-        time.sleep(
-            0.3
-        )
+        time.sleep(0.3)
 
     print(
         "  ✗ Capture Continue button not found."
@@ -966,15 +946,6 @@ def capture_attempt(driver):
     ):
 
         return False
-
-    # ----------------------------------------------------
-    # Phase 4 - inventory awareness.
-    #
-    # Check ball availability up front. If there's genuinely
-    # no usable ball, say so clearly instead of letting
-    # select_best_ball() poll for the full WAIT_LONG timeout
-    # only to report the same thing.
-    # ----------------------------------------------------
 
     if not has_usable_ball(
         driver
@@ -1028,9 +999,7 @@ def capture_attempt(driver):
 
             return False
 
-        time.sleep(
-            0.3
-        )
+        time.sleep(0.3)
 
     print(
         "  ⚠ Capture result timed out."
@@ -1062,10 +1031,6 @@ def capture_encounter(driver):
             f"  Capture attempt #{attempt}"
         )
 
-        # ----------------------------------------------------
-        # First attempt or next attempt.
-        # ----------------------------------------------------
-
         success = capture_attempt(
             driver
         )
@@ -1075,15 +1040,6 @@ def capture_encounter(driver):
             print(
                 "  ✓ Capture successful."
             )
-
-            # ------------------------------------------------
-            # IMPORTANT:
-            #
-            # After the Pokémon is caught, Eclipse RPG does
-            # NOT automatically return to the search page.
-            #
-            # We MUST click Continue.
-            # ------------------------------------------------
 
             print(
                 "  Continuing back to search..."
@@ -1105,15 +1061,6 @@ def capture_encounter(driver):
 
             return True
 
-        # ----------------------------------------------------
-        # Capture failed.
-        #
-        # Phase 4 - inventory awareness: if there's genuinely
-        # no ball left, stop here instead of clicking
-        # "Use Another" and looping through the remaining
-        # attempts for no reason.
-        # ----------------------------------------------------
-
         if not has_usable_ball(
             driver
         ):
@@ -1124,10 +1071,6 @@ def capture_encounter(driver):
             )
 
             return False
-
-        # ----------------------------------------------------
-        # Look for Use Another.
-        # ----------------------------------------------------
 
         use_another = find_use_another(
             driver
@@ -1152,10 +1095,6 @@ def capture_encounter(driver):
                 )
 
                 continue
-
-        # ----------------------------------------------------
-        # No retry option.
-        # ----------------------------------------------------
 
         print(
             "  ✗ No further capture attempt "
