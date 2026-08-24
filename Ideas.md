@@ -14,6 +14,7 @@ A running list of features, improvements, and automation ideas for the Eclipse R
   - Stop automatically when the target is reached.
   - Optional maximum-battle safety limit.
   - Return to the Training menu when complete.
+  - Changes the fight difficulty to help ensure it gets as close to that level as possible (<table cellpadding="3" cellspacing="2" width="100%"><tbody><tr><td class="tnav_battle_information" align="center" width="100%">Battle Difficulty</td></tr><tr><td class="tnav_battle" align="center" width="100%" style="padding-top: 1px; padding-bottom: 1px;">Higher battle difficulty makes battles harder but increases EXP and Platinum Coins earned.</td></tr><tr><td class="tnav_battle" align="center" width="100%" style="padding-top: 1px; padding-bottom: 1px;"><select name="B_Difficulty" class="formselect" onchange="if (!window.__cfRLUnblockHandlers) return false; battle_difficulty(this.value);"><option value="veryeasy">Very Easy Mode</option><option value="easy">Easy Mode</option><option value="normal">Normal Mode</option><option value="hard">Hard Mode</option><option value="veryhard" id="B_DifficultySelected" selected="">Very Hard Mode</option></select><b><i><span id="B_DifficultyNotification"></span></i></b></td></tr></tbody></table>)
 
 - [ ] Battle for X battles.
 
@@ -29,8 +30,8 @@ A running list of features, improvements, and automation ideas for the Eclipse R
 
 🔎 Searching
 
-- [ ] Normal map searching.
-- [ ] Exclusive Legendary Areas searching.
+- [x] Normal map searching.
+- [x] Exclusive Legendary Areas searching.
 - [ ] Automatically detect newly unlocked exclusive maps.
 - [ ] Search for a specific Pokémon across available maps.
 - [ ] Search for a specific variant/form.
