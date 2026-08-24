@@ -403,12 +403,11 @@ def get_current_battle_level(driver):
 
     Real Eclipse RPG structure:
 
-        <td class="tnav_battle" align="center" width="100%">
+        <td class="tnav_battle"
+            align="center"
+            width="100%">
             Level <b>10135</b>
         </td>
-
-    We intentionally read the visible text and extract the
-    number following the word "Level".
 
     This is the authoritative level source for training.
     """
@@ -490,42 +489,64 @@ def wait_for_current_level(
 def get_battle_level_gain(driver):
 
     """
-    Read the level gain from Battle Results.
+    Read the level gain from the Battle Results.
 
     Example:
 
         +30 levels
-        Lv. 10,045
+        Lv. 10,255
     """
 
     try:
 
         elements = driver.find_elements(
             By.CSS_SELECTOR,
-            "td.tnav_battle"
+            "table.outcome"
         )
 
-        for element in elements:
+        for table in elements:
 
             try:
 
-                text = element.get_attribute(
-                    "textContent"
-                ) or ""
+                if not table.is_displayed():
+                    continue
 
-                text = normalize(text)
-
-                match = re.search(
-                    r"\+([\d,]+)\s+levels?",
-                    text,
-                    re.IGNORECASE
+                rows = table.find_elements(
+                    By.CSS_SELECTOR,
+                    "tr"
                 )
 
-                if match:
+                for row in rows:
 
-                    return int(
-                        match.group(1).replace(",", "")
-                    )
+                    try:
+
+                        text = row.get_attribute(
+                            "textContent"
+                        ) or ""
+
+                        text = normalize(text)
+
+                        match = re.search(
+                            r"\+([\d,]+)\s+levels?",
+                            text,
+                            re.IGNORECASE
+                        )
+
+                        if match:
+
+                            return int(
+                                match.group(1).replace(
+                                    ",",
+                                    ""
+                                )
+                            )
+
+                    except (
+                        StaleElementReferenceException,
+                        WebDriverException,
+                    ):
+
+                        continue
 
             except (
                 StaleElementReferenceException,
@@ -548,41 +569,76 @@ def get_battle_level_gain(driver):
 def get_battle_exp_gain(driver):
 
     """
-    Read:
+    Read EXP from the Battle Results table.
 
-        +16209694 EXP
+    Real Eclipse RPG structure:
 
-    from Battle Results.
+        <table class="outcome">
+            ...
+            <tr>
+                <td class="left_s">
+                    +<b>16549731</b> EXP
+                </td>
+                <td class="right_s">
+                    0/543,434
+                </td>
+            </tr>
+        </table>
+
+    Returns the integer EXP gain, or None if it cannot
+    be found.
     """
 
     try:
 
-        elements = driver.find_elements(
+        outcome_tables = driver.find_elements(
             By.CSS_SELECTOR,
-            "td.tnav_battle"
+            "table.outcome"
         )
 
-        for element in elements:
+        for table in outcome_tables:
 
             try:
 
-                text = element.get_attribute(
-                    "textContent"
-                ) or ""
+                if not table.is_displayed():
+                    continue
 
-                text = normalize(text)
-
-                match = re.search(
-                    r"\+([\d,]+)\s+EXP\b",
-                    text,
-                    re.IGNORECASE
+                rows = table.find_elements(
+                    By.CSS_SELECTOR,
+                    "tr"
                 )
 
-                if match:
+                for row in rows:
 
-                    return int(
-                        match.group(1).replace(",", "")
-                    )
+                    try:
+
+                        text = row.get_attribute(
+                            "textContent"
+                        ) or ""
+
+                        text = normalize(text)
+
+                        match = re.search(
+                            r"\+([\d,]+)\s+EXP\b",
+                            text,
+                            re.IGNORECASE
+                        )
+
+                        if match:
+
+                            return int(
+                                match.group(1).replace(
+                                    ",",
+                                    ""
+                                )
+                            )
+
+                    except (
+                        StaleElementReferenceException,
+                        WebDriverException,
+                    ):
+
+                        continue
 
             except (
                 StaleElementReferenceException,
@@ -753,9 +809,17 @@ def wait_for_battle_to_finish(driver):
 
             last_state = state
 
+        # ----------------------------------------------------
+        # BATTLE FINISHED
+        # ----------------------------------------------------
+
         if state in RESTART_STATES:
 
             return True
+
+        # ----------------------------------------------------
+        # ATTACK
+        # ----------------------------------------------------
 
         if state in ATTACK_STATES:
 
@@ -959,7 +1023,7 @@ def train_until_level(
         }
 
     # --------------------------------------------------------
-    # Read the actual level from the battle page.
+    # Read actual level from battle page.
     # --------------------------------------------------------
 
     current_level = wait_for_current_level(
@@ -980,21 +1044,23 @@ def train_until_level(
             "exp_gained": 0,
         }
 
-    print()
-    print(
-        f"✓ Current level: "
-        f"{current_level:,}"
-    )
-
     # --------------------------------------------------------
-    # Already at target.
+    # Already at or above target.
     # --------------------------------------------------------
 
     if current_level >= target_level:
 
         print()
         print(
-            f"✓ Target level already reached."
+            "✓ Target level already reached."
+        )
+
+        print(
+            f"  Current level: {current_level:,}"
+        )
+
+        print(
+            f"  Target level:  {target_level:,}"
         )
 
         return {
@@ -1004,61 +1070,60 @@ def train_until_level(
             "exp_gained": 0,
         }
 
-    battle_count = 0
+    # --------------------------------------------------------
+    # Session totals.
+    # --------------------------------------------------------
+
+    battles_completed = 0
     total_exp_gained = 0
+
     last_level_gain = None
 
-    # ========================================================
-    # MAIN LEVEL TRAINING LOOP
-    # ========================================================
+    # --------------------------------------------------------
+    # Initial progress.
+    # --------------------------------------------------------
 
-    while battle_count < max_battles:
+    print_training_progress(
+        current_level,
+        target_level,
+    )
 
-        print_training_progress(
-            current_level,
-            target_level,
-            last_level_gain,
-            total_exp_gained,
-        )
+    # --------------------------------------------------------
+    # Battle loop.
+    # --------------------------------------------------------
+
+    while (
+        current_level < target_level
+        and battles_completed < max_battles
+    ):
 
         print()
         print(
             f"=== Battle "
-            f"{battle_count + 1}/"
+            f"{battles_completed + 1}/"
             f"{max_battles:,} safety limit ==="
         )
 
         # ----------------------------------------------------
-        # Complete current battle.
+        # Wait for and complete current battle.
         # ----------------------------------------------------
 
         if not wait_for_battle_to_finish(driver):
 
             print()
             print(
-                "✗ Battle timed out."
+                "✗ Battle did not finish "
+                "within the timeout."
             )
 
-            return {
-                "battles": battle_count,
-                "current_level": current_level,
-                "target_level": target_level,
-                "exp_gained": total_exp_gained,
-            }
+            break
 
         print(
             "  ✓ Battle finished."
         )
 
         # ----------------------------------------------------
-        # Read battle results BEFORE clicking Restart Battle.
-        #
-        # The result page contains:
-        #
-        # +30 levels
-        # +16209694 EXP
-        #
-        # and the current level.
+        # Read Battle Results BEFORE navigating away.
         # ----------------------------------------------------
 
         level_gain = get_battle_level_gain(
@@ -1069,6 +1134,16 @@ def train_until_level(
             driver
         )
 
+        # ----------------------------------------------------
+        # Count battle.
+        # ----------------------------------------------------
+
+        battles_completed += 1
+
+        # ----------------------------------------------------
+        # Record level gain.
+        # ----------------------------------------------------
+
         if level_gain is not None:
 
             last_level_gain = level_gain
@@ -1077,6 +1152,16 @@ def train_until_level(
                 f"  Levels gained: "
                 f"+{level_gain:,}"
             )
+
+        else:
+
+            print(
+                "  ⚠ Could not read level gain."
+            )
+
+        # ----------------------------------------------------
+        # Record EXP gain.
+        # ----------------------------------------------------
 
         if exp_gain is not None:
 
@@ -1087,103 +1172,347 @@ def train_until_level(
                 f"+{exp_gain:,}"
             )
 
-        # ----------------------------------------------------
-        # IMPORTANT:
-        #
-        # Read the authoritative level from:
-        #
-        # <td class="tnav_battle">
-        #     Level <b>10135</b>
-        # </td>
-        #
-        # This happens AFTER the battle result has been
-        # processed.
-        # ----------------------------------------------------
-
-        updated_level = wait_for_current_level(
-            driver,
-            timeout=10,
-        )
-
-        if updated_level is not None:
-
-            current_level = updated_level
-
             print(
-                f"  Current level: "
-                f"{current_level:,}/"
-                f"{target_level:,}"
+                f"  Total EXP gained: "
+                f"{total_exp_gained:,}"
             )
 
         else:
 
-            # ------------------------------------------------
-            # If the level isn't readable, use the known level
-            # gain as a fallback rather than falsely claiming
-            # the old level is current.
-            # ------------------------------------------------
+            print(
+                "  ⚠ Could not read EXP gain."
+            )
 
-            if (
-                current_level is not None
-                and level_gain is not None
-            ):
+        # ----------------------------------------------------
+        # Read authoritative current level.
+        #
+        # The battle page's:
+        #
+        #   Level <b>xxxxx</b>
+        #
+        # is used instead of calculating the level ourselves.
+        # ----------------------------------------------------
 
-                current_level += level_gain
+        new_level = wait_for_current_level(
+            driver,
+            timeout=WAIT_LONG,
+        )
 
-                print(
-                    f"  Current level estimated from "
-                    f"battle result: "
-                    f"{current_level:,}/"
-                    f"{target_level:,}"
-                )
+        if new_level is not None:
 
-            else:
+            current_level = new_level
 
-                print(
-                    "  ⚠ Could not determine updated level."
-                )
+        elif level_gain is not None:
 
-        battle_count += 1
+            # Fallback only if the page level cannot be read.
 
-        print()
+            current_level += level_gain
+
+            print(
+                "  ⚠ Battle-page level unavailable; "
+                "using level gain fallback."
+            )
+
+        else:
+
+            print()
+            print(
+                "✗ Could not determine the new level."
+            )
+
+            break
+
+        # ----------------------------------------------------
+        # Display progress.
+        # ----------------------------------------------------
+
         print(
-            f"✓ Battle "
-            f"{battle_count} complete!"
+            f"  Current level: "
+            f"{current_level:,}/"
+            f"{target_level:,}"
         )
 
         # ----------------------------------------------------
         # TARGET REACHED
-        #
-        # Check immediately BEFORE starting another battle.
         # ----------------------------------------------------
 
-        if (
-            current_level is not None
-            and current_level >= target_level
-        ):
+        if current_level >= target_level:
 
             print()
             print(
-                "=" * 60
+                "✓ Battle complete!"
             )
 
+            break
+
+        # ----------------------------------------------------
+        # Prepare next battle.
+        # ----------------------------------------------------
+
+        print()
+        print(
+            "✓ Battle "
+            f"{battles_completed} complete!"
+        )
+
+        print(
+            "  Preparing next battle..."
+        )
+
+        # ----------------------------------------------------
+        # Click Restart / Fight Again / Battle Again.
+        # ----------------------------------------------------
+
+        if not click_restart_battle(driver):
+
+            print()
             print(
-                f"✓ TARGET LEVEL REACHED!"
+                "✗ Could not start the next battle."
             )
 
+            break
+
+        print(
+            "  ✓ Next battle started."
+        )
+
+        # ----------------------------------------------------
+        # Allow page to settle.
+        # ----------------------------------------------------
+
+        time.sleep(
+            random.uniform(
+                BETWEEN_BATTLES_WAIT[0],
+                BETWEEN_BATTLES_WAIT[1]
+            )
+        )
+
+        # ----------------------------------------------------
+        # Read level again after next battle starts.
+        # ----------------------------------------------------
+
+        refreshed_level = get_current_battle_level(
+            driver
+        )
+
+        if refreshed_level is not None:
+
+            current_level = refreshed_level
+
+        print_training_progress(
+            current_level,
+            target_level,
+            last_level_gain,
+            total_exp_gained,
+        )
+
+    # ========================================================
+    # FINAL RESULT
+    # ========================================================
+
+    print()
+    print("=" * 60)
+
+    if current_level >= target_level:
+
+        print(
+            "✓ TARGET LEVEL REACHED!"
+        )
+
+    elif battles_completed >= max_battles:
+
+        print(
+            "⚠ TRAINING STOPPED AT SAFETY LIMIT!"
+        )
+
+    else:
+
+        print(
+            "⚠ TRAINING STOPPED!"
+        )
+
+    print(
+        f"  Current level: "
+        f"{current_level:,}"
+    )
+
+    print(
+        f"  Target level:  "
+        f"{target_level:,}"
+    )
+
+    print(
+        f"  Battles completed: "
+        f"{battles_completed:,}"
+    )
+
+    print(
+        f"  Total EXP gained: "
+        f"{total_exp_gained:,}"
+    )
+
+    print("=" * 60)
+
+    return {
+        "battles": battles_completed,
+        "current_level": current_level,
+        "target_level": target_level,
+        "exp_gained": total_exp_gained,
+    }
+
+
+# ============================================================
+# BATTLE FOR X BATTLES
+# ============================================================
+
+def train_mode(
+    driver,
+    max_battles=MAX_BATTLES,
+):
+
+    print()
+    print("=" * 60)
+    print("BATTLE TRAINING")
+    print("=" * 60)
+    print()
+
+    print(
+        f"Battle limit: {max_battles:,}"
+    )
+
+    # --------------------------------------------------------
+    # Validate battle limit.
+    # --------------------------------------------------------
+
+    if max_battles <= 0:
+
+        print(
+            "✗ Battle limit must be greater than 0."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": None,
+            "target_level": None,
+            "exp_gained": 0,
+        }
+
+    # --------------------------------------------------------
+    # Start initial battle.
+    # --------------------------------------------------------
+
+    if not start_training_battle(driver):
+
+        print()
+        print(
+            "✗ Could not start training battle."
+        )
+
+        return {
+            "battles": 0,
+            "current_level": None,
+            "target_level": None,
+            "exp_gained": 0,
+        }
+
+    # --------------------------------------------------------
+    # Read starting level.
+    # --------------------------------------------------------
+
+    current_level = wait_for_current_level(
+        driver
+    )
+
+    # --------------------------------------------------------
+    # Session totals.
+    # --------------------------------------------------------
+
+    battles_completed = 0
+    total_exp_gained = 0
+
+    # --------------------------------------------------------
+    # Battle loop.
+    # --------------------------------------------------------
+
+    while battles_completed < max_battles:
+
+        print()
+        print(
+            f"=== Battle "
+            f"{battles_completed + 1}/"
+            f"{max_battles:,} ==="
+        )
+
+        # ----------------------------------------------------
+        # Fight.
+        # ----------------------------------------------------
+
+        if not wait_for_battle_to_finish(driver):
+
+            print()
             print(
-                f"  Current level: "
-                f"{current_level:,}"
+                "✗ Battle did not finish "
+                "within the timeout."
             )
 
-            print(
-                f"  Target level:  "
-                f"{target_level:,}"
-            )
+            break
+
+        print(
+            "  ✓ Battle finished."
+        )
+
+        # ----------------------------------------------------
+        # Read Battle Results.
+        # ----------------------------------------------------
+
+        level_gain = get_battle_level_gain(
+            driver
+        )
+
+        exp_gain = get_battle_exp_gain(
+            driver
+        )
+
+        # ----------------------------------------------------
+        # Count battle.
+        # ----------------------------------------------------
+
+        battles_completed += 1
+
+        print()
+        print(
+            f"✓ Battle "
+            f"{battles_completed} complete!"
+        )
+
+        # ----------------------------------------------------
+        # Level gain.
+        # ----------------------------------------------------
+
+        if level_gain is not None:
 
             print(
-                f"  Battles completed: "
-                f"{battle_count}"
+                f"  Levels gained: "
+                f"+{level_gain:,}"
+            )
+
+        else:
+
+            print(
+                "  ⚠ Could not read level gain."
+            )
+
+        # ----------------------------------------------------
+        # EXP gain.
+        # ----------------------------------------------------
+
+        if exp_gain is not None:
+
+            total_exp_gained += exp_gain
+
+            print(
+                f"  EXP gained: "
+                f"+{exp_gain:,}"
             )
 
             print(
@@ -1191,35 +1520,36 @@ def train_until_level(
                 f"{total_exp_gained:,}"
             )
 
+        else:
+
             print(
-                "=" * 60
+                "  ⚠ Could not read EXP gain."
             )
 
-            return {
-                "battles": battle_count,
-                "current_level": current_level,
-                "target_level": target_level,
-                "exp_gained": total_exp_gained,
-            }
-
         # ----------------------------------------------------
-        # Safety limit reached.
+        # Current level.
         # ----------------------------------------------------
 
-        if battle_count >= max_battles:
+        new_level = get_current_battle_level(
+            driver
+        )
 
-            print()
+        if new_level is not None:
+
+            current_level = new_level
+
             print(
-                "⚠ Training stopped because the "
-                "battle safety limit was reached."
+                f"  Current level: "
+                f"{current_level:,}"
             )
 
-            return {
-                "battles": battle_count,
-                "current_level": current_level,
-                "target_level": target_level,
-                "exp_gained": total_exp_gained,
-            }
+        # ----------------------------------------------------
+        # Requested number of battles completed.
+        # ----------------------------------------------------
+
+        if battles_completed >= max_battles:
+
+            break
 
         # ----------------------------------------------------
         # Start next battle.
@@ -1233,158 +1563,11 @@ def train_until_level(
 
             print()
             print(
-                "✗ Could not start next battle."
+                "✗ Could not start the next battle."
             )
-
-            return {
-                "battles": battle_count,
-                "current_level": current_level,
-                "target_level": target_level,
-                "exp_gained": total_exp_gained,
-            }
-
-        print(
-            "  ✓ Next battle started."
-        )
-
-        time.sleep(
-            random.uniform(
-                BETWEEN_BATTLES_WAIT[0],
-                BETWEEN_BATTLES_WAIT[1]
-            )
-        )
-
-    return {
-        "battles": battle_count,
-        "current_level": current_level,
-        "target_level": target_level,
-        "exp_gained": total_exp_gained,
-    }
-
-
-# ============================================================
-# TRAIN FOR X BATTLES
-# ============================================================
-
-def train_for_battles(
-    driver,
-    max_battles=MAX_BATTLES,
-):
-
-    print()
-    print("=" * 60)
-    print("TRAIN MODE")
-    print("=" * 60)
-
-    print()
-    print(
-        f"Battle limit: {max_battles:,}"
-    )
-
-    # --------------------------------------------------------
-    # Start first battle.
-    # --------------------------------------------------------
-
-    if not start_training_battle(driver):
-
-        print()
-        print(
-            "✗ Could not start training battle."
-        )
-
-        return 0
-
-    battle_count = 0
-
-    # ========================================================
-    # BATTLE LOOP
-    # ========================================================
-
-    while battle_count < max_battles:
-
-        print()
-        print(
-            f"=== Battle "
-            f"{battle_count + 1}/"
-            f"{max_battles:,} ==="
-        )
-
-        # ----------------------------------------------------
-        # Fight current battle.
-        # ----------------------------------------------------
-
-        if not wait_for_battle_to_finish(driver):
-
-            print()
-            print(
-                "✗ Battle timed out."
-            )
-
-            return battle_count
-
-        print(
-            "  ✓ Battle finished."
-        )
-
-        # ----------------------------------------------------
-        # Collect battle statistics.
-        # ----------------------------------------------------
-
-        level_gain = get_battle_level_gain(
-            driver
-        )
-
-        exp_gain = get_battle_exp_gain(
-            driver
-        )
-
-        battle_count += 1
-
-        print()
-        print(
-            f"✓ Battle "
-            f"{battle_count} complete!"
-        )
-
-        if level_gain is not None:
-
-            print(
-                f"  Levels gained: "
-                f"+{level_gain:,}"
-            )
-
-        if exp_gain is not None:
-
-            print(
-                f"  EXP gained: "
-                f"+{exp_gain:,}"
-            )
-
-        # ----------------------------------------------------
-        # Requested number completed.
-        # ----------------------------------------------------
-
-        if battle_count >= max_battles:
 
             break
 
-        # ----------------------------------------------------
-        # Restart the battle directly.
-        # ----------------------------------------------------
-
-        print(
-            "  Preparing next battle..."
-        )
-
-        if not click_restart_battle(driver):
-
-            print()
-            print(
-                "✗ Could not start next battle."
-            )
-
-            return battle_count
-
         print(
             "  ✓ Next battle started."
         )
@@ -1396,65 +1579,37 @@ def train_for_battles(
             )
         )
 
+    # ========================================================
+    # FINAL RESULT
+    # ========================================================
+
     print()
+    print("=" * 60)
+    print("✓ BATTLE TRAINING COMPLETE")
     print("=" * 60)
 
     print(
-        f"✓ Completed "
-        f"{battle_count:,} battles."
+        f"  Battles completed: "
+        f"{battles_completed:,}"
     )
+
+    if current_level is not None:
+
+        print(
+            f"  Current level: "
+            f"{current_level:,}"
+        )
 
     print(
-        "=" * 60
+        f"  Total EXP gained: "
+        f"{total_exp_gained:,}"
     )
 
-    return battle_count
+    print("=" * 60)
 
-
-# ============================================================
-# MAIN TRAINING ENTRY POINT
-# ============================================================
-
-def train_mode(
-    driver,
-    max_battles=MAX_BATTLES,
-    target_level=None,
-):
-
-    """
-    Main training entry point.
-
-    Two modes are supported:
-
-        train_mode(driver, max_battles=100)
-            -> Battle for a fixed number of battles.
-
-        train_mode(
-            driver,
-            max_battles=10000,
-            target_level=10235
-        )
-            -> Battle until the Pokémon reaches level 10235,
-               with the battle count acting as a safety limit.
-    """
-
-    # --------------------------------------------------------
-    # LEVEL TARGET MODE
-    # --------------------------------------------------------
-
-    if target_level is not None:
-
-        return train_until_level(
-            driver,
-            target_level=target_level,
-            max_battles=max_battles,
-        )
-
-    # --------------------------------------------------------
-    # NORMAL BATTLE COUNT MODE
-    # --------------------------------------------------------
-
-    return train_for_battles(
-        driver,
-        max_battles=max_battles,
-    )
+    return {
+        "battles": battles_completed,
+        "current_level": current_level,
+        "target_level": None,
+        "exp_gained": total_exp_gained,
+    }
