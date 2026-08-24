@@ -2,40 +2,14 @@
 Messages (Private Messages / inbox) module for Eclipse RPG
 Automation - Phase 5.
 
-Built directly from the real HTML structure of
-https://eclipserpg.com/private_messages?area=inbox
+Built from the Eclipse RPG private message HTML structure.
 
-Row structure discovered:
+Important:
+    Eclipse RPG deletes messages immediately when the delete
+    control is activated. There is no site-side confirmation.
 
-    Sender:
-        <a id="PM_Username{id}" href="/user?id={user_id}">
-            <span class="username-component">...</span>
-        </a>
-
-    Subject / open message:
-        <div onclick="view_message({id});">
-            <a id="PM_ViewMessage{id}">{subject}</a>
-        </div>
-
-    Full body (already present in a hidden tooltip - no need
-    to open a separate detail page):
-        <div id="MessageTooltip{id}" ...>
-            <span id="PM_SubjectContentText{id}">{subject}</span>
-            <div id="PM_MessageContentText{id}">{body}</div>
-        </div>
-
-    Date:
-        <i id="PM_Date{id}">August 20, 2026 (05:32 PM)</i>
-
-    Delete (deletes IMMEDIATELY, no confirmation from the site
-    itself - all confirmation safety lives in this bot):
-        <a id="PM_Terminate{id}"
-           onclick="terminate_read_message({id}, 'terminate');">X</a>
-
-    Pagination:
-        https://eclipserpg.com/private_messages?area=inbox&page=N
-        <a href="?area=inbox&page=N" class="page-number-link">N</a>
-        current page has class "page-number-link disabled"
+    Destructive confirmation is therefore handled by the menu
+    layer before any deletion begins.
 """
 
 import re
@@ -52,7 +26,6 @@ from selenium.common.exceptions import (
 from config import BASE_URL
 from utils import (
     safe_click,
-    normalize,
     wait_for_document_ready,
     sleep_random,
 )
@@ -60,10 +33,8 @@ from utils import (
 
 INBOX_URL = f"{BASE_URL}/private_messages?area=inbox"
 
-# Matches ids like "PM_ViewMessage6081523"
 VIEW_ID_PATTERN = re.compile(r"^PM_ViewMessage(\d+)$")
 
-# Eclipse RPG date format, e.g. "August 20, 2026 (05:32 PM)"
 DATE_FORMAT = "%B %d, %Y (%I:%M %p)"
 
 
@@ -74,64 +45,76 @@ DATE_FORMAT = "%B %d, %Y (%I:%M %p)"
 def open_inbox(driver, page=1):
     """
     Navigate to a specific inbox page.
+
+    Returns True on success and False if navigation fails.
     """
 
-    url = f"{INBOX_URL}&page={page}"
-
     try:
+        if page <= 1:
+            url = INBOX_URL
+        else:
+            url = f"{INBOX_URL}&page={page}"
 
         driver.get(url)
 
         wait_for_document_ready(driver)
 
-        sleep_random(0.6, 1.2)
+        sleep_random(0.5, 1.0)
 
         return True
 
     except WebDriverException:
-
         return False
 
 
+def reload_current_inbox_page(driver, page=1):
+    """
+    Reload the requested inbox page.
+
+    Kept separate from open_inbox() so bulk operations can
+    clearly indicate that they are intentionally refreshing
+    the live pagination.
+    """
+
+    return open_inbox(driver, page=page)
+
+
 # ============================================================
-# READING MESSAGES ON THE CURRENT PAGE
+# READING MESSAGES
 # ============================================================
 
 def get_messages_on_page(driver):
     """
-    Return the messages visible on the currently loaded inbox
-    page as a list of dicts:
+    Read all messages currently rendered on the page.
 
-        {
-            "id": "6081523",
-            "subject": "Re: Crystal Riolu",
-            "sender": "Snoooom",
-            "sender_user_id": "972624",
-            "date": "August 20, 2026 (05:32 PM)",
-            "body": "I sent the 30m :)",
-        }
+    Returns:
 
-    Only reads what's already rendered on the page - does not
-    navigate anywhere.
+        [
+            {
+                "id": "...",
+                "subject": "...",
+                "sender": "...",
+                "sender_user_id": "...",
+                "date": "...",
+                "body": "..."
+            }
+        ]
     """
 
     messages = []
 
     try:
-
         view_links = driver.find_elements(
             By.CSS_SELECTOR,
             "a[id^='PM_ViewMessage']",
         )
 
     except WebDriverException:
-
         return messages
 
     for link in view_links:
 
         try:
-
             element_id = link.get_attribute("id") or ""
 
             match = VIEW_ID_PATTERN.match(element_id)
@@ -147,7 +130,6 @@ def get_messages_on_page(driver):
             sender_user_id = ""
 
             try:
-
                 username_link = driver.find_element(
                     By.ID,
                     f"PM_Username{message_id}",
@@ -171,7 +153,6 @@ def get_messages_on_page(driver):
             date_text = ""
 
             try:
-
                 date_element = driver.find_element(
                     By.ID,
                     f"PM_Date{message_id}",
@@ -185,15 +166,16 @@ def get_messages_on_page(driver):
             body = ""
 
             try:
-
                 body_element = driver.find_element(
                     By.ID,
                     f"PM_MessageContentText{message_id}",
                 )
 
-                body = body_element.get_attribute(
-                    "textContent"
-                ).strip()
+                body = (
+                    body_element
+                    .get_attribute("textContent")
+                    .strip()
+                )
 
             except NoSuchElementException:
                 pass
@@ -211,7 +193,6 @@ def get_messages_on_page(driver):
             StaleElementReferenceException,
             WebDriverException,
         ):
-
             continue
 
     return messages
@@ -219,8 +200,9 @@ def get_messages_on_page(driver):
 
 def get_message_date(message):
     """
-    Parse a message's date string into a datetime, or None if
-    it can't be parsed (format changed, empty, etc).
+    Convert Eclipse RPG's message date into datetime.
+
+    Returns None when the date cannot be parsed.
     """
 
     date_text = message.get("date", "")
@@ -229,7 +211,11 @@ def get_message_date(message):
         return None
 
     try:
-        return datetime.strptime(date_text, DATE_FORMAT)
+        return datetime.strptime(
+            date_text,
+            DATE_FORMAT,
+        )
+
     except ValueError:
         return None
 
@@ -240,20 +226,18 @@ def get_message_date(message):
 
 def get_total_pages(driver):
     """
-    Read the highest page number from the pagination controls
-    on the currently loaded inbox page. Returns 1 if pagination
-    isn't present (i.e. everything fits on one page).
+    Return the highest visible page number.
+
+    Returns 1 if no pagination is present.
     """
 
     try:
-
         links = driver.find_elements(
             By.CSS_SELECTOR,
             "a.page-number-link",
         )
 
     except WebDriverException:
-
         return 1
 
     highest = 1
@@ -261,17 +245,18 @@ def get_total_pages(driver):
     for link in links:
 
         try:
-
             text = link.text.strip()
 
             if text.isdigit():
-                highest = max(highest, int(text))
+                highest = max(
+                    highest,
+                    int(text),
+                )
 
         except (
             StaleElementReferenceException,
             WebDriverException,
         ):
-
             continue
 
     return highest
@@ -279,79 +264,77 @@ def get_total_pages(driver):
 
 def get_total_message_count(driver):
     """
-    Estimate the total number of messages across the whole
-    inbox without scanning every page:
+    Calculate the actual total number of messages.
 
-        count on page 1 * (total_pages - 1) + count on last page
-
-    This assumes every page except possibly the last holds the
-    same number of messages, which matches how this kind of
-    pagination normally works.
+    This walks through the current pagination instead of
+    assuming every page contains exactly the same number of
+    messages.
     """
 
-    open_inbox(driver, page=1)
-
-    first_page_messages = get_messages_on_page(driver)
-    per_page = len(first_page_messages)
+    if not open_inbox(driver, page=1):
+        return 0
 
     total_pages = get_total_pages(driver)
 
-    if total_pages <= 1:
-        return per_page
+    total = 0
 
-    open_inbox(driver, page=total_pages)
+    for page in range(1, total_pages + 1):
 
-    last_page_messages = get_messages_on_page(driver)
+        if not open_inbox(driver, page=page):
+            continue
 
-    total = per_page * (total_pages - 1) + len(last_page_messages)
+        total += len(
+            get_messages_on_page(driver)
+        )
 
     return total
 
 
 # ============================================================
-# DELETING MESSAGES
+# DELETING ONE MESSAGE
 # ============================================================
 
 def delete_message(driver, message_id):
     """
-    Delete a single message by id. The message must already be
-    present on the currently loaded page (delete ids are only
-    rendered for messages shown on that page).
+    Delete one message from the currently loaded page.
 
-    IMPORTANT: Eclipse RPG deletes immediately with no
-    confirmation dialog of its own. Any "are you sure" step
-    must happen in the calling code BEFORE this is called.
+    The message must exist on the current page.
     """
 
     try:
-
         delete_link = driver.find_element(
             By.ID,
             f"PM_Terminate{message_id}",
         )
 
     except NoSuchElementException:
-
         return False
 
-    if not safe_click(driver, delete_link):
+    except WebDriverException:
         return False
 
-    # Give the page a moment to process the deletion before
-    # the caller looks at the page again.
-    time.sleep(0.4)
+    try:
+        if not safe_click(driver, delete_link):
+            return False
+
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
+        return False
+
+    time.sleep(0.25)
 
     return True
 
 
 def delete_messages(driver, message_ids):
     """
-    Delete a list of message ids that are all present on the
-    CURRENTLY LOADED page. Returns (succeeded, failed) counts.
+    Delete multiple messages currently visible on the page.
 
-    Does not navigate between pages - if you need to delete
-    messages spread across multiple pages, open each page and
-    call this once per page with just that page's ids.
+    Returns:
+
+        (succeeded, failed)
     """
 
     succeeded = 0
@@ -367,40 +350,206 @@ def delete_messages(driver, message_ids):
     return succeeded, failed
 
 
+# ============================================================
+# DELETE EVERYTHING
+# ============================================================
+
 def delete_all_messages(driver, progress_callback=None):
     """
     Delete every message in the inbox.
 
-    Repeatedly reloads inbox page 1 and deletes whatever is
-    currently showing there. This handles inboxes where later
-    pages shift forward as earlier messages are removed,
-    without assuming a specific re-numbering behavior - it just
-    keeps clearing page 1 until it comes back empty.
+    IMPORTANT:
 
-    progress_callback(deleted_so_far), if given, is called after
-    each page's batch so the caller can show live progress.
+    This intentionally works from page 1 repeatedly.
+
+    When messages are deleted, later pages shift forward.
+    Reloading page 1 ensures that shifted messages are never
+    skipped.
+
+    This is slower than trying to delete from a static list,
+    but it is dramatically safer for a changing paginated
+    inbox.
     """
 
     total_deleted = 0
 
-    # Safety cap so a site quirk can't cause an infinite loop.
-    max_iterations = 500
+    max_passes = 10000
+    passes = 0
 
-    for _ in range(max_iterations):
+    while passes < max_passes:
 
-        open_inbox(driver, page=1)
+        passes += 1
+
+        if not open_inbox(driver, page=1):
+            time.sleep(1)
+            continue
 
         messages = get_messages_on_page(driver)
 
         if not messages:
             break
 
-        for message in messages:
+        ids = [
+            message["id"]
+            for message in messages
+        ]
 
-            if delete_message(driver, message["id"]):
-                total_deleted += 1
+        succeeded, _failed = delete_messages(
+            driver,
+            ids,
+        )
+
+        total_deleted += succeeded
 
         if progress_callback:
-            progress_callback(total_deleted)
+            progress_callback(
+                total_deleted,
+                len(messages),
+                succeeded,
+            )
+
+        if succeeded == 0:
+            break
+
+        time.sleep(0.4)
 
     return total_deleted
+
+
+# ============================================================
+# DELETE MESSAGES OLDER THAN CUTOFF
+# ============================================================
+
+def delete_messages_older_than(
+    driver,
+    cutoff,
+    progress_callback=None,
+):
+    """
+    Delete every message older than `cutoff`.
+
+    This is the important replacement for the old
+    page-number-based implementation.
+
+    The inbox is treated as dynamic:
+
+        1. Open page 1.
+        2. Find old messages.
+        3. Delete them.
+        4. Reload page 1.
+        5. Repeat until page 1 has no old messages.
+        6. Move to page 2.
+        7. Repeat.
+
+    If deleting messages causes pagination to collapse,
+    we return to page 1 rather than trusting stale page
+    numbers.
+
+    This prevents messages from being skipped.
+    """
+
+    total_deleted = 0
+
+    current_page = 1
+    passes = 0
+    max_passes = 10000
+
+    while passes < max_passes:
+
+        passes += 1
+
+        if not open_inbox(
+            driver,
+            page=current_page,
+        ):
+            time.sleep(1)
+            continue
+
+        messages = get_messages_on_page(driver)
+
+        # Empty page means we have gone past the inbox.
+        if not messages:
+
+            if current_page <= 1:
+                break
+
+            current_page -= 1
+            continue
+
+        old_messages = []
+
+        for message in messages:
+
+            message_date = get_message_date(message)
+
+            if message_date is None:
+                continue
+
+            if message_date < cutoff:
+                old_messages.append(message)
+
+        # ----------------------------------------------------
+        # OLD MESSAGES FOUND
+        # ----------------------------------------------------
+
+        if old_messages:
+
+            ids = [
+                message["id"]
+                for message in old_messages
+            ]
+
+            succeeded, failed = delete_messages(
+                driver,
+                ids,
+            )
+
+            total_deleted += succeeded
+
+            if progress_callback:
+                progress_callback(
+                    total_deleted,
+                    current_page,
+                    len(old_messages),
+                    succeeded,
+                    failed,
+                )
+
+            # ------------------------------------------------
+            # VERY IMPORTANT
+            #
+            # Deletion changes pagination.
+            #
+            # Always return to page 1 after deleting so
+            # messages that shifted from later pages cannot
+            # be skipped.
+            # ------------------------------------------------
+
+            current_page = 1
+
+            time.sleep(0.5)
+
+            if succeeded == 0:
+                # Nothing was successfully deleted. Continuing
+                # forever would accomplish nothing.
+                break
+
+            continue
+
+        # ----------------------------------------------------
+        # NO OLD MESSAGES ON THIS PAGE
+        # ----------------------------------------------------
+
+        total_pages = get_total_pages(driver)
+
+        if current_page >= total_pages:
+            break
+
+        current_page += 1
+
+    return total_deleted
+
+
+# ============================================================
+# END
+# ============================================================
