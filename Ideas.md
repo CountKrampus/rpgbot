@@ -320,40 +320,16 @@ HTML Evidence — Post-Capture Continue
 
 💬 Messages
 
-- [ ] Message inbox viewer.
-- [ ] Show unread message count.
-- [ ] Read messages from the terminal.
-- [ ] Delete individual messages.
-- [ ] Bulk-delete messages.
-- [ ] Delete messages across all pages.
-- [ ] Confirmation before bulk deletion.
+- [x] Message inbox viewer.
+- [x] Show unread message count.
+- [x] Read messages from the terminal.
+- [x] Delete individual messages.
+- [x] Bulk-delete messages.
+- [x] Delete messages across all pages.
+- [x] Confirmation before bulk deletion.
 - [ ] Optional automatic cleanup of old messages.
+- [ ] Make the delete messages more "Human Like"
 
-HTML Evidence — Message Inbox
-
-<!-- Paste message inbox HTML here -->
-
-HTML Evidence — Individual Message
-
-<!-- Paste individual message HTML here -->
-
-HTML Evidence — Unread Messages
-
-<!-- Paste unread message HTML here -->
-
-HTML Evidence — Delete Message
-
-<!-- Paste individual delete HTML here -->
-
-HTML Evidence — Bulk Delete
-
-<!-- Paste bulk delete HTML here -->
-
-HTML Evidence — Message Pagination
-
-<!-- Paste message page navigation HTML here -->
-
----
 
 🛒 Shops
 
