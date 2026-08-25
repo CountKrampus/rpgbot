@@ -1054,6 +1054,8 @@ def capture_attempt(driver):
         "  Waiting for capture result..."
     )
 
+    encounter_url = driver.current_url
+
     start = time.time()
 
     while time.time() - start < WAIT_LONG:
@@ -1076,6 +1078,37 @@ def capture_attempt(driver):
             print()
             print(
                 "  ⚠ Capture failed."
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # Recover gracefully if the battle page changes.
+        #
+        # If the URL has moved away from where the attack was
+        # made, and neither a success nor failure phrase has
+        # shown up, the page most likely navigated somewhere
+        # unexpected (site hiccup, session refresh, unrelated
+        # redirect) rather than still genuinely processing the
+        # capture. Stop polling early with a clear reason
+        # instead of burning the full timeout on a page that's
+        # never going to show a result.
+        # ----------------------------------------------------
+
+        try:
+
+            current_url = driver.current_url
+
+        except WebDriverException:
+
+            current_url = encounter_url
+
+        if current_url != encounter_url:
+
+            print()
+            print(
+                "  ⚠ Battle page changed unexpectedly "
+                "during capture."
             )
 
             return False
