@@ -19,6 +19,7 @@ from search import (
     search_pokemon_across_maps,
 )
 from capture import get_capture_stats
+from box import search_box
 
 
 BANNER = (
@@ -29,10 +30,11 @@ BANNER = (
     + "\n"
     "1. Normal Maps\n"
     "2. Exclusive Legendary Areas\n"
-    "3. Search Pokemon\n"
+    "3. Search Pokemon (maps)\n"
     "4. Search Settings\n"
     "5. Search Statistics\n"
-    "6. Back"
+    "6. Search Box\n"
+    "7. Back"
 )
 
 
@@ -193,6 +195,61 @@ def _search_statistics():
     input("\nPress Enter to return to the search menu...")
 
 
+def _search_box(driver):
+
+    print()
+    print("=" * 60)
+    print("SEARCH BOX")
+    print("=" * 60)
+
+    query = input(
+        "\nEnter a Pokemon name (or part of it): "
+    ).strip()
+
+    if not query:
+        print("✗ Nothing entered.")
+        input("\nPress Enter to return to the search menu...")
+        return
+
+    print(f"\nSearching your box for '{query}'...")
+
+    results = search_box(driver, query)
+
+    print()
+    print("=" * 60)
+    print(f"BOX RESULTS FOR '{query}'")
+    print("=" * 60)
+
+    if not results:
+
+        print("\nNo matches found in your box.")
+
+    else:
+
+        print()
+
+        for pokemon in results:
+
+            level_text = (
+                f"Lv. {pokemon['level']}"
+                if pokemon["level"] is not None
+                else "Lv. ?"
+            )
+
+            gender_text = (
+                f" ({pokemon['gender']})"
+                if pokemon["gender"]
+                else ""
+            )
+
+            print(
+                f"  - {pokemon['name']} "
+                f"{level_text}{gender_text}"
+            )
+
+    input("\nPress Enter to return to the search menu...")
+
+
 def search_menu(driver):
     while True:
 
@@ -216,6 +273,9 @@ def search_menu(driver):
             _search_statistics()
 
         elif choice == "6":
+            _search_box(driver)
+
+        elif choice == "7":
             return
 
         else:
