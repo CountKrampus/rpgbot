@@ -31,85 +31,6 @@ PREFERRED_BALL_ORDER = [
 ]
 
 
-def get_preferred_ball_order():
-    """
-    Return the current ball priority order (a copy, so callers
-    can't accidentally mutate the live list).
-    """
-
-    return list(PREFERRED_BALL_ORDER)
-
-
-def set_preferred_ball_order(order):
-    """
-    Replace the ball priority order used by select_best_ball().
-
-    order: a list of ball names, most-preferred first. A ball
-    not in this list is still usable as a fallback if none of
-    the preferred balls are available - this only controls
-    priority, not what's allowed.
-    """
-
-    global PREFERRED_BALL_ORDER
-
-    if not order:
-        return False
-
-    PREFERRED_BALL_ORDER = list(order)
-
-    return True
-
-
-# ============================================================
-# CAPTURE STATISTICS
-# ============================================================
-#
-# In-memory session counters, incremented at the natural points
-# in select_best_ball() / capture_encounter() below.
-
-_capture_stats = {
-    "encounters": 0,
-    "captured": 0,
-    "failed": 0,
-    "balls_used": {},
-}
-
-
-def get_capture_stats():
-    """
-    Return a copy of the current session's capture statistics:
-
-        {
-            "encounters": 12,
-            "captured": 9,
-            "failed": 3,
-            "balls_used": {"Ultra Ball": 7, "Great Ball": 2},
-        }
-    """
-
-    return {
-        "encounters": _capture_stats["encounters"],
-        "captured": _capture_stats["captured"],
-        "failed": _capture_stats["failed"],
-        "balls_used": dict(_capture_stats["balls_used"]),
-    }
-
-
-def reset_capture_stats():
-
-    _capture_stats["encounters"] = 0
-    _capture_stats["captured"] = 0
-    _capture_stats["failed"] = 0
-    _capture_stats["balls_used"] = {}
-
-
-def _record_ball_used(ball_name):
-
-    _capture_stats["balls_used"][ball_name] = (
-        _capture_stats["balls_used"].get(ball_name, 0) + 1
-    )
-
-
 # ============================================================
 # HELPERS
 # ============================================================
@@ -453,8 +374,6 @@ def select_best_ball(driver):
                             print(
                                 f"  ✓ {selected} clicked."
                             )
-
-                            _record_ball_used(selected)
 
                             return True
 
@@ -1100,8 +1019,6 @@ def capture_encounter(driver):
         "  Pokémon encounter!"
     )
 
-    _capture_stats["encounters"] += 1
-
     max_attempts = 3
 
     for attempt in range(
@@ -1123,8 +1040,6 @@ def capture_encounter(driver):
             print(
                 "  ✓ Capture successful."
             )
-
-            _capture_stats["captured"] += 1
 
             print(
                 "  Continuing back to search..."
@@ -1154,8 +1069,6 @@ def capture_encounter(driver):
                 "  ✗ Out of usable Poke Balls. "
                 "Stopping encounter."
             )
-
-            _capture_stats["failed"] += 1
 
             return False
 
@@ -1188,14 +1101,10 @@ def capture_encounter(driver):
             "available."
         )
 
-        _capture_stats["failed"] += 1
-
         return False
 
     print(
         "  ✗ Capture attempts exhausted."
     )
-
-    _capture_stats["failed"] += 1
 
     return False

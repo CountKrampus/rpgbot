@@ -29,96 +29,9 @@ SEARCH_DELAY = (
     2.5,
 )
 
-
-def get_search_delay():
-    """
-    Return the current (min, max) random delay range used
-    between search clicks.
-    """
-
-    return SEARCH_DELAY
-
-
-def set_search_delay(min_seconds, max_seconds):
-    """
-    Set the (min, max) random delay range used between search
-    clicks. Both values must be non-negative and min <= max.
-    """
-
-    global SEARCH_DELAY
-
-    if min_seconds < 0 or max_seconds < 0:
-        return False
-
-    if min_seconds > max_seconds:
-        return False
-
-    SEARCH_DELAY = (min_seconds, max_seconds)
-
-    return True
-
 EXCLUSIVE_AREAS_URL = (
     f"{BASE_URL}/legendary_areas?kind=exclusive"
 )
-
-
-# ============================================================
-# SEARCH STATISTICS / HISTORY
-# ============================================================
-#
-# In-memory session tracking. run_searches() below appends one
-# history entry per map session and updates the running totals.
-
-_search_stats = {
-    "total_searches": 0,
-    "history": [],
-}
-
-
-def get_search_stats():
-    """
-    Return a copy of the current session's search statistics:
-
-        {
-            "total_searches": 340,
-            "history": [
-                {"map": "Great Volcano", "searches": 120},
-                {"map": "Jirachi's Park", "searches": 220},
-            ],
-        }
-    """
-
-    return {
-        "total_searches": _search_stats["total_searches"],
-        "history": list(_search_stats["history"]),
-    }
-
-
-def reset_search_stats():
-
-    _search_stats["total_searches"] = 0
-    _search_stats["history"] = []
-
-
-def _record_search_session(map_name, searches_completed):
-
-    _search_stats["total_searches"] += searches_completed
-
-    _search_stats["history"].append({
-        "map": map_name,
-        "searches": searches_completed,
-    })
-
-
-# ============================================================
-# NEWLY UNLOCKED EXCLUSIVE MAP DETECTION
-# ============================================================
-#
-# Tracks which exclusive maps have been seen this session so
-# get_exclusive_maps() can call out ones that just appeared,
-# instead of only ever showing the current full list.
-
-_previously_seen_exclusive_maps = set()
 
 
 # ============================================================
@@ -304,44 +217,11 @@ def get_exclusive_maps(driver):
             "unlocked exclusive map(s)."
         )
 
-        current_names = {
-            area["name"] for area in exclusive_maps
-        }
-
-        is_first_check = not _previously_seen_exclusive_maps
-
-        newly_unlocked = (
-            set()
-            if is_first_check
-            else current_names - _previously_seen_exclusive_maps
-        )
-
         for area in exclusive_maps:
 
-            if area["name"] in newly_unlocked:
-
-                print(
-                    f"  - {area['name']}  ★ NEW"
-                )
-
-            else:
-
-                print(
-                    f"  - {area['name']}"
-                )
-
-        if newly_unlocked:
-
-            print()
             print(
-                f"★ {len(newly_unlocked)} newly unlocked "
-                "since last check: "
-                + ", ".join(sorted(newly_unlocked))
+                f"  - {area['name']}"
             )
-
-        _previously_seen_exclusive_maps.update(
-            current_names
-        )
 
     else:
 
@@ -858,9 +738,7 @@ def handle_search_encounter(driver):
 def run_searches(
     driver,
     map_name,
-    searches,
-    is_exclusive=False,
-    area=None,
+    searches
 ):
 
     print()
@@ -869,11 +747,10 @@ def run_searches(
         f"on {map_name}."
     )
 
-    completed = 0
-
-    search_number = 1
-
-    while search_number <= searches:
+    for search_number in range(
+        1,
+        searches + 1
+    ):
 
         current, maximum = get_search_progress(
             driver
@@ -902,11 +779,6 @@ def run_searches(
 
             print(
                 "✗ Search button disappeared."
-            )
-
-            _record_search_session(
-                map_name,
-                completed
             )
 
             return False
@@ -940,61 +812,7 @@ def run_searches(
                     "✗ Encounter handling failed."
                 )
 
-                # ----------------------------------------------------
-                # Better encounter recovery: the battle page may
-                # have changed unexpectedly (stale element,
-                # navigation glitch, etc). Try reopening the
-                # current map once before giving up on the whole
-                # search session.
-                # ----------------------------------------------------
-
-                print(
-                    "  Attempting recovery by "
-                    "reopening the map..."
-                )
-
-                if is_exclusive and area is not None:
-
-                    recovered = open_exclusive_area(
-                        driver,
-                        area
-                    )
-
-                else:
-
-                    recovered = open_map(
-                        driver,
-                        map_name
-                    )
-
-                if not recovered:
-
-                    print(
-                        "  ✗ Recovery failed. "
-                        "Stopping search session."
-                    )
-
-                    _record_search_session(
-                        map_name,
-                        completed
-                    )
-
-                    return False
-
-                print(
-                    "  ✓ Recovered - resuming search."
-                )
-
-                time.sleep(
-                    random.uniform(
-                        1.0,
-                        1.5
-                    )
-                )
-
-                search_number += 1
-
-                continue
+                return False
 
             time.sleep(
                 random.uniform(
@@ -1003,19 +821,10 @@ def run_searches(
                 )
             )
 
-        completed += 1
-
-        search_number += 1
-
     print()
     print(
         f"✓ Finished {searches} searches "
         f"on {map_name}."
-    )
-
-    _record_search_session(
-        map_name,
-        completed
     )
 
     return True
@@ -1368,9 +1177,7 @@ def search_mode(driver):
         if not run_searches(
             driver,
             map_name,
-            searches,
-            is_exclusive=is_exclusive,
-            area=area
+            searches
         ):
 
             print()
@@ -1541,9 +1348,7 @@ def _run_search_session(
         if not run_searches(
             driver,
             map_name,
-            searches,
-            is_exclusive=is_exclusive,
-            area=area
+            searches
         ):
 
             print()
