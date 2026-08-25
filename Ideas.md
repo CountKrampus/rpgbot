@@ -237,6 +237,7 @@ A running list of features, improvements, and automation ideas for the Eclipse R
 - [ ] Better encounter recovery when a battle page changes.
 - [ ] Track Pokémon encountered during searches.
 - [ ] Track rare/special Pokémon encounters.
+- [ ] Be able to search for specific pokemon in your box.
 
 HTML Evidence — Normal Maps
 
