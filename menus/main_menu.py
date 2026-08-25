@@ -17,6 +17,7 @@ from trade import trade_mode
 from menus.search_menu import search_menu
 from menus.messages_menu import messages_menu
 from menus.training_menu import training_menu
+from menus.shop_menu import shop_menu
 
 
 BANNER = r"""
@@ -90,7 +91,7 @@ def main_menu(driver):
             messages_menu(driver)
 
         elif choice == "6":
-            _not_yet_implemented("Shops")
+            shop_menu(driver)
 
         elif choice == "7":
             _not_yet_implemented("Pokemon")
