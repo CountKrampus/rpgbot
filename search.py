@@ -651,6 +651,215 @@ def click_search(driver):
 
 
 # ============================================================
+# ENCOUNTERED POKEMON TRACKING
+# ============================================================
+#
+# Built from the real HTML of the wild-Pokemon encounter
+# announcement:
+#
+#   <div class="wild-pokemon-message">
+#     <div style="display: flex; ...">
+#       <font size="3"><b>Shellder</b> Lv. 43</font>
+#       <img src=".../gender-male.png">
+#       <img src="/favicon.ico" title="Registered in Pokedex">
+#     </div>
+#     A wild <b>Shellder</b> appeared!
+#   </div>
+#
+# The dex-icon <img> with title="Registered in Pokedex" only
+# appears if that species is already dexed (same pattern as the
+# map wild-pokes listing). "Rare" here is a best-effort keyword
+# match on the same variant/color prefixes seen in the map wild
+# listing (Shiny, Crystal, Golden, Rainbow, etc) - the site
+# doesn't have an explicit "rare" flag we've seen.
+
+RARE_KEYWORDS = [
+    "shiny",
+    "crystal",
+    "golden",
+    "rainbow",
+    "astral",
+    "genesis",
+    "ruby",
+    "sapphire",
+    "pearl",
+    "emerald",
+    "relic",
+    "legacy",
+    "light",
+    "shadow",
+    "silver star",
+    "star",
+]
+
+_encountered_pokemon = {
+    "total": 0,
+    "by_name": {},
+    "rare": [],
+}
+
+
+def get_encounter_pokemon(driver):
+    """
+    Scrape the wild Pokemon encounter announcement on the
+    currently loaded page, if present. Returns None if there's
+    no encounter message (nothing to scrape).
+
+    Returns:
+
+        {
+            "name": "Shellder",
+            "level": 43,
+            "gender": "male",   # "male" / "female" / None
+            "dexed": False,
+        }
+    """
+
+    try:
+
+        container = driver.find_element(
+            By.CSS_SELECTOR,
+            "div.wild-pokemon-message",
+        )
+
+    except (
+        NoSuchElementException,
+        WebDriverException,
+    ):
+
+        return None
+
+    try:
+
+        font = container.find_element(
+            By.TAG_NAME,
+            "font",
+        )
+
+        text = font.text.strip()
+
+    except (
+        NoSuchElementException,
+        WebDriverException,
+    ):
+
+        return None
+
+    name = text
+    level = None
+
+    level_match = re.match(
+        r"^(.*)\s+Lv\.\s*([\d,]+)$",
+        text,
+    )
+
+    if level_match:
+
+        name = level_match.group(1).strip()
+
+        level = int(
+            level_match.group(2).replace(",", "")
+        )
+
+    gender = None
+    dexed = False
+
+    try:
+
+        images = container.find_elements(
+            By.TAG_NAME,
+            "img",
+        )
+
+        for image in images:
+
+            src = image.get_attribute("src") or ""
+            title = image.get_attribute("title") or ""
+
+            if "gender-male" in src:
+                gender = "male"
+            elif "gender-female" in src:
+                gender = "female"
+
+            if title == "Registered in Pokedex":
+                dexed = True
+
+    except WebDriverException:
+
+        pass
+
+    return {
+        "name": name,
+        "level": level,
+        "gender": gender,
+        "dexed": dexed,
+    }
+
+
+def is_rare_pokemon(name):
+    """
+    Best-effort check for whether a Pokemon's display name
+    includes one of the known rare/special variant keywords.
+    """
+
+    lowered = normalize(name)
+
+    return any(
+        keyword in lowered
+        for keyword in RARE_KEYWORDS
+    )
+
+
+def get_encountered_pokemon_stats():
+    """
+    Return a copy of the current session's encountered-Pokemon
+    statistics:
+
+        {
+            "total": 47,
+            "by_name": {"Shellder": 12, "Slowpoke": 8, ...},
+            "rare": [
+                {"name": "Shiny Goldeen", "level": 22, ...},
+                ...
+            ],
+        }
+    """
+
+    return {
+        "total": _encountered_pokemon["total"],
+        "by_name": dict(_encountered_pokemon["by_name"]),
+        "rare": list(_encountered_pokemon["rare"]),
+    }
+
+
+def reset_encountered_pokemon_stats():
+
+    _encountered_pokemon["total"] = 0
+    _encountered_pokemon["by_name"] = {}
+    _encountered_pokemon["rare"] = []
+
+
+def _record_encounter(pokemon):
+
+    if not pokemon:
+        return
+
+    name = pokemon["name"]
+
+    _encountered_pokemon["total"] += 1
+
+    _encountered_pokemon["by_name"][name] = (
+        _encountered_pokemon["by_name"].get(name, 0) + 1
+    )
+
+    if is_rare_pokemon(name):
+
+        _encountered_pokemon["rare"].append(
+            pokemon
+        )
+
+
+# ============================================================
 # ENCOUNTER FIGHT
 # ============================================================
 
@@ -1014,6 +1223,28 @@ def open_exclusive_area(
 # ============================================================
 
 def handle_search_encounter(driver):
+
+    encountered = get_encounter_pokemon(
+        driver
+    )
+
+    if encountered:
+
+        rarity_marker = (
+            " ★ RARE"
+            if is_rare_pokemon(encountered["name"])
+            else ""
+        )
+
+        print(
+            f"  Wild {encountered['name']} "
+            f"Lv. {encountered['level']}"
+            f"{rarity_marker}"
+        )
+
+        _record_encounter(
+            encountered
+        )
 
     if not click_encounter_fight(
         driver

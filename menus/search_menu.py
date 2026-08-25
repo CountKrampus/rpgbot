@@ -17,6 +17,7 @@ from search import (
     set_search_delay,
     get_search_stats,
     search_pokemon_across_maps,
+    get_encountered_pokemon_stats,
 )
 from capture import get_capture_stats
 from box import search_box
@@ -191,6 +192,34 @@ def _search_statistics():
 
         for ball, count in capture_stats["balls_used"].items():
             print(f"  {ball}: {count}")
+
+    encountered_stats = get_encountered_pokemon_stats()
+
+    if encountered_stats["by_name"]:
+
+        print()
+        print(
+            f"Pokemon encountered "
+            f"({encountered_stats['total']} total):"
+        )
+
+        for name, count in encountered_stats["by_name"].items():
+            print(f"  {name}: {count}")
+
+    if encountered_stats["rare"]:
+
+        print()
+        print("★ Rare/special encounters:")
+
+        for pokemon in encountered_stats["rare"]:
+
+            level_text = (
+                f"Lv. {pokemon['level']}"
+                if pokemon["level"] is not None
+                else "Lv. ?"
+            )
+
+            print(f"  {pokemon['name']} {level_text}")
 
     input("\nPress Enter to return to the search menu...")
 
