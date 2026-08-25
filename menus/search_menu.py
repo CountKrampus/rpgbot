@@ -16,6 +16,7 @@ from search import (
     get_search_delay,
     set_search_delay,
     get_search_stats,
+    search_pokemon_across_maps,
 )
 from capture import get_capture_stats
 
@@ -35,17 +36,60 @@ BANNER = (
 )
 
 
-def _not_yet_implemented(section_name):
+def _search_pokemon(driver):
 
     print()
     print("=" * 60)
-    print(section_name.upper())
+    print("SEARCH POKEMON")
     print("=" * 60)
-    print()
+
+    query = input(
+        "\nEnter a Pokemon name (or part of it, "
+        "e.g. 'gastly' or 'shiny'): "
+    ).strip()
+
+    if not query:
+        print("✗ Nothing entered.")
+        input("\nPress Enter to return to the search menu...")
+        return
+
     print(
-        f"{section_name} isn't implemented yet. "
-        "This will be added in a later phase."
+        f"\nSearching all maps for '{query}'... "
+        "this checks every map page, so it may take a while."
     )
+
+    def progress(map_name, index, total):
+        print(f"  [{index}/{total}] Checking {map_name}...")
+
+    results = search_pokemon_across_maps(
+        driver,
+        query,
+        progress_callback=progress,
+    )
+
+    print()
+    print("=" * 60)
+    print(f"RESULTS FOR '{query}'")
+    print("=" * 60)
+
+    if not results:
+
+        print("\nNo matches found on any map.")
+
+    else:
+
+        for map_name, pokes in results.items():
+
+            print(f"\n{map_name}:")
+
+            for pokemon in pokes:
+
+                dex_marker = (
+                    " (dexed)" if pokemon["dexed"] else ""
+                )
+
+                print(f"  - {pokemon['name']}{dex_marker}")
+
     input("\nPress Enter to return to the search menu...")
 
 
@@ -163,7 +207,7 @@ def search_menu(driver):
             exclusive_maps_mode(driver)
 
         elif choice == "3":
-            _not_yet_implemented("Search Pokemon")
+            _search_pokemon(driver)
 
         elif choice == "4":
             _search_settings()

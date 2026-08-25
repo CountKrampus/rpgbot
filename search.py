@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
     StaleElementReferenceException,
     WebDriverException,
+    NoSuchElementException,
 )
 
 from capture import capture_encounter
@@ -350,6 +351,198 @@ def get_exclusive_maps(driver):
         )
 
     return exclusive_maps
+
+
+# ============================================================
+# WILD POKEMON LISTING / CROSS-MAP SEARCH
+# ============================================================
+#
+# Built from the real HTML of a map's wild-Pokemon listing
+# (Manaphy's Haven):
+#
+#   <div class="wild-pokes">
+#     <a href="/amount_viewer?pokemon=Slowpoke"
+#        class="tooltip map-wild-poke dexed tooltipstered">
+#       <img src="..." alt="Slowpoke" width="35" height="35">
+#       <img class="map-wild-dex-icon" src="/favicon.ico">
+#     </a>
+#     ...
+#   </div>
+#
+# The <img alt="..."> holds the FULL display name, including
+# any variant/form prefix (Shiny, Hyper, Crystal, Genesis,
+# Astral, Ruby, Rainbow, Pearl, Sapphire, Golden, Emerald,
+# Relic, Legacy, Light, Shadow, Silver Star, Star, etc). A
+# "dexed" class on the <a> (plus an extra dex-icon <img>) marks
+# a species already registered in the Pokedex.
+#
+# Since the display name already includes variant/form, a
+# single substring search over these names covers both
+# "search for a Pokemon" and "search for a variant/form" -
+# they're the same underlying data.
+
+def get_wild_pokemon(driver):
+    """
+    Scrape the wild Pokemon listing on the CURRENTLY LOADED map
+    page. Returns a list of dicts:
+
+        {
+            "name": "Shiny Hyper Totodile",
+            "species_param": "HyperTotodile",
+            "dexed": True,
+        }
+
+    species_param is the site's internal ?pokemon= key (form
+    modifiers like Hyper/Genesis, but not color variants like
+    Shiny/Crystal/Pearl - those only show up in the display
+    name).
+    """
+
+    results = []
+
+    try:
+
+        links = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.wild-pokes a.map-wild-poke",
+        )
+
+    except WebDriverException:
+
+        return results
+
+    for link in links:
+
+        try:
+
+            href = link.get_attribute("href") or ""
+
+            param_match = re.search(
+                r"pokemon=([^&]+)",
+                href,
+            )
+
+            species_param = (
+                param_match.group(1)
+                if param_match
+                else ""
+            )
+
+            class_attr = link.get_attribute("class") or ""
+
+            dexed = "dexed" in class_attr.split()
+
+            image = link.find_element(
+                By.TAG_NAME,
+                "img",
+            )
+
+            name = (
+                image.get_attribute("alt") or ""
+            ).strip()
+
+            if not name:
+                continue
+
+            results.append({
+                "name": name,
+                "species_param": species_param,
+                "dexed": dexed,
+            })
+
+        except (
+            StaleElementReferenceException,
+            WebDriverException,
+            NoSuchElementException,
+        ):
+
+            continue
+
+    return results
+
+
+def search_pokemon_across_maps(
+    driver,
+    query,
+    progress_callback=None,
+):
+    """
+    Search every known map (regular + unlocked exclusive) for
+    wild Pokemon whose display name contains `query`
+    (case-insensitive substring match, so "gastly" matches
+    "Gastly", "Shiny Gastly", "Crystal Gastly", etc - this
+    covers variant/form search too, since the variant is part
+    of the display name).
+
+    This visits every map page to build the result, since
+    there's no known site-wide search endpoint - it can take a
+    while for a large map list.
+
+    progress_callback(map_name, index, total), if given, is
+    called right before each map is checked, so a caller can
+    show live progress.
+
+    Returns a dict of only the maps with at least one match:
+
+        {
+            "Manaphy's Haven": [
+                {"name": "Shiny Totodile", ...},
+                ...
+            ],
+        }
+    """
+
+    wanted = normalize(query)
+
+    matches_by_map = {}
+
+    exclusive_maps = get_exclusive_maps(driver)
+
+    total = len(MAPS) + len(exclusive_maps)
+
+    index = 0
+
+    for map_name in MAPS:
+
+        index += 1
+
+        if progress_callback:
+            progress_callback(map_name, index, total)
+
+        if not open_map(driver, map_name):
+            continue
+
+        wild = get_wild_pokemon(driver)
+
+        found = [
+            pokemon for pokemon in wild
+            if wanted in normalize(pokemon["name"])
+        ]
+
+        if found:
+            matches_by_map[map_name] = found
+
+    for area in exclusive_maps:
+
+        index += 1
+
+        if progress_callback:
+            progress_callback(area["name"], index, total)
+
+        if not open_exclusive_area(driver, area):
+            continue
+
+        wild = get_wild_pokemon(driver)
+
+        found = [
+            pokemon for pokemon in wild
+            if wanted in normalize(pokemon["name"])
+        ]
+
+        if found:
+            matches_by_map[area["name"]] = found
+
+    return matches_by_map
 
 
 # ============================================================
