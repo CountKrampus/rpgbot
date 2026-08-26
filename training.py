@@ -150,6 +150,13 @@ BETWEEN_BATTLES_WAIT = (0.5, 0.8)
 ATTACK_PROCESSING_WAIT = (0.2, 0.4)
 BATTLE_POLL_WAIT = (0.10, 0.20)
 
+# Max time to confirm an attack click was actually processed by
+# the site (the battle button briefly shows stale text before
+# updating). Polls at BATTLE_POLL_WAIT intervals, same as the
+# rest of the battle loop - this used to have its own separate,
+# slower hardcoded poll interval.
+ATTACK_CONFIRM_TIMEOUT = 4
+
 
 # ============================================================
 # BATTLE STATES
@@ -733,7 +740,7 @@ def get_battle_exp_gain(driver):
                         text = normalize(text)
 
                         match = re.search(
-                            r"\+([\d,]+)\s+EXP\b",
+                            r"\+([\d,]+)\s+EXP",
                             text,
                             re.IGNORECASE
                         )
@@ -790,13 +797,16 @@ def wait_for_attack_processing(driver):
 
     The site can temporarily leave #battlebtn showing
     Fight/Attack after the click has already been accepted.
+    Polls at BATTLE_POLL_WAIT - the same interval the rest of
+    the battle loop uses - instead of a separate, slower
+    hardcoded interval.
     """
 
     start = time.time()
 
     initial_state = get_battle_button_text(driver)
 
-    while time.time() - start < 8:
+    while time.time() - start < ATTACK_CONFIRM_TIMEOUT:
 
         current_state = get_battle_button_text(driver)
 
@@ -810,8 +820,8 @@ def wait_for_attack_processing(driver):
 
         time.sleep(
             random.uniform(
-                0.25,
-                0.45
+                BATTLE_POLL_WAIT[0],
+                BATTLE_POLL_WAIT[1]
             )
         )
 
@@ -849,13 +859,6 @@ def click_attack(driver):
 
             print(
                 "  ✓ Attack/Fight clicked."
-            )
-
-            time.sleep(
-                random.uniform(
-                    ATTACK_PROCESSING_WAIT[0],
-                    ATTACK_PROCESSING_WAIT[1]
-                )
             )
 
             wait_for_attack_processing(
@@ -914,7 +917,7 @@ def wait_for_battle_to_finish(driver):
 
             continue
 
-        if state != last_state:
+        if state and state != last_state:
 
             print(
                 f"  Battle button state: "
@@ -1014,7 +1017,12 @@ def click_restart_battle(driver):
 
                 pass
 
-        time.sleep(0.3)
+        time.sleep(
+            random.uniform(
+                BATTLE_POLL_WAIT[0],
+                BATTLE_POLL_WAIT[1]
+            )
+        )
 
     print(
         "  ✗ Restart/Battle Again/Fight Again "
