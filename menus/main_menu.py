@@ -18,6 +18,7 @@ from menus.search_menu import search_menu
 from menus.messages_menu import messages_menu
 from menus.training_menu import training_menu
 from menus.shop_menu import shop_menu
+from menus.settings_menu import settings_menu
 
 
 BANNER = r"""
@@ -103,7 +104,7 @@ def main_menu(driver):
             _not_yet_implemented("Utilities")
 
         elif choice == "10":
-            _not_yet_implemented("Settings")
+            settings_menu(driver)
 
         elif choice == "0":
             break

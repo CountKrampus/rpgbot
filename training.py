@@ -3,9 +3,11 @@ import time
 import random
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import (
     StaleElementReferenceException,
     WebDriverException,
+    NoSuchElementException,
 )
 
 from utils import (
@@ -23,6 +25,123 @@ MAX_BATTLES = 100
 
 # Absolute safety limit for "battle until level".
 MAX_LEVEL_BATTLES = 10_000
+
+
+# ============================================================
+# BATTLE DIFFICULTY
+# ============================================================
+#
+# Real site structure (from Ideas.md's HTML evidence):
+#
+#   <select name="B_Difficulty" class="formselect"
+#           onchange="battle_difficulty(this.value);">
+#     <option value="veryeasy">Very Easy Mode</option>
+#     <option value="easy">Easy Mode</option>
+#     <option value="normal">Normal Mode</option>
+#     <option value="hard">Hard Mode</option>
+#     <option value="veryhard" id="B_DifficultySelected" selected>
+#         Very Hard Mode
+#     </option>
+#   </select>
+#
+# Higher difficulty = harder battles but more EXP/Platinum Coins.
+
+DIFFICULTY_VALUES = [
+    "veryeasy",
+    "easy",
+    "normal",
+    "hard",
+    "veryhard",
+]
+
+DIFFICULTY_LABELS = {
+    "veryeasy": "Very Easy Mode",
+    "easy": "Easy Mode",
+    "normal": "Normal Mode",
+    "hard": "Hard Mode",
+    "veryhard": "Very Hard Mode",
+}
+
+
+def get_battle_difficulty(driver):
+    """
+    Read the currently selected battle difficulty value
+    (e.g. "veryhard"), or None if the difficulty selector isn't
+    present on the current page.
+    """
+
+    try:
+
+        select_element = driver.find_element(
+            By.NAME,
+            "B_Difficulty",
+        )
+
+        select = Select(select_element)
+
+        selected = select.first_selected_option
+
+        return selected.get_attribute("value")
+
+    except (
+        NoSuchElementException,
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
+
+        return None
+
+
+def set_battle_difficulty(driver, difficulty):
+    """
+    Set the battle difficulty via the site's own B_Difficulty
+    select (fires the same battle_difficulty() JS the site
+    itself uses). Returns True on success.
+
+    difficulty must be one of DIFFICULTY_VALUES.
+    """
+
+    if difficulty not in DIFFICULTY_VALUES:
+
+        print(
+            f"  ✗ Unknown difficulty: {difficulty}"
+        )
+
+        return False
+
+    try:
+
+        select_element = driver.find_element(
+            By.NAME,
+            "B_Difficulty",
+        )
+
+        select = Select(select_element)
+
+        select.select_by_value(difficulty)
+
+        print(
+            f"  ✓ Battle difficulty set to "
+            f"{DIFFICULTY_LABELS.get(difficulty, difficulty)}."
+        )
+
+        time.sleep(
+            random.uniform(0.5, 1.0)
+        )
+
+        return True
+
+    except (
+        NoSuchElementException,
+        StaleElementReferenceException,
+        WebDriverException,
+    ) as error:
+
+        print(
+            f"  ✗ Could not set battle difficulty: {error}"
+        )
+
+        return False
 
 WAIT_LONG = 20
 BATTLE_END_TIMEOUT = 120
@@ -971,6 +1090,7 @@ def train_until_level(
     driver,
     target_level,
     max_battles=MAX_LEVEL_BATTLES,
+    difficulty=None,
 ):
 
     print()
@@ -1021,6 +1141,17 @@ def train_until_level(
             "target_level": target_level,
             "exp_gained": 0,
         }
+
+    # --------------------------------------------------------
+    # Apply preferred battle difficulty, if requested.
+    # --------------------------------------------------------
+
+    if difficulty is not None:
+
+        set_battle_difficulty(
+            driver,
+            difficulty,
+        )
 
     # --------------------------------------------------------
     # Read actual level from battle page.
@@ -1368,6 +1499,7 @@ def train_until_level(
 def train_mode(
     driver,
     max_battles=MAX_BATTLES,
+    difficulty=None,
 ):
 
     print()
@@ -1414,6 +1546,17 @@ def train_mode(
             "target_level": None,
             "exp_gained": 0,
         }
+
+    # --------------------------------------------------------
+    # Apply preferred battle difficulty, if requested.
+    # --------------------------------------------------------
+
+    if difficulty is not None:
+
+        set_battle_difficulty(
+            driver,
+            difficulty,
+        )
 
     # --------------------------------------------------------
     # Read starting level.

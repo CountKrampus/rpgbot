@@ -2,6 +2,7 @@ from account import account_selector, get_saved_password
 from browser import setup_driver
 from login import login
 from menus.main_menu import main_menu
+import settings
 
 
 def main():
@@ -40,6 +41,10 @@ def main():
             )
 
             return
+
+        settings.apply_settings(
+            settings.load_settings()
+        )
 
         main_menu(driver)
 
