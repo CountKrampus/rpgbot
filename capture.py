@@ -355,13 +355,39 @@ def get_available_balls(driver):
     return balls
 
 
-def has_usable_ball(driver):
+def has_usable_ball(driver, timeout=3):
 
-    return bool(
-        get_available_balls(
+    """
+    Phase 4 - inventory awareness.
+
+    Quick check for whether at least one usable ball is
+    currently available - but polls briefly rather than
+    checking once instantly.
+
+    Right after clicking Item (especially right after a
+    previous "Use Another"), the ball-selection UI can take a
+    moment to render. A single instant check could read zero
+    balls purely because the UI hadn't loaded yet, not because
+    the account is actually out - this caused a false "No
+    usable Poke Ball in inventory" even when balls were
+    confirmed available (e.g. right after a
+    "Use Another (101 left)" click, which explicitly reported
+    balls remaining).
+    """
+
+    start = time.time()
+
+    while time.time() - start < timeout:
+
+        if get_available_balls(
             driver
-        )
-    )
+        ):
+
+            return True
+
+        time.sleep(0.25)
+
+    return False
 
 
 def select_best_ball(driver):
