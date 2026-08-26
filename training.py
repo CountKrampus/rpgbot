@@ -738,7 +738,7 @@ def get_battle_exp_gain(driver):
                         text = normalize(text)
 
                         match = re.search(
-                            r"\+([\d,]+)\s+EXP\b",
+                            r"\+([\d,]+)\s+EXP",
                             text,
                             re.IGNORECASE
                         )
