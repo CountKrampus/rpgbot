@@ -790,32 +790,71 @@ def battle_has_ended(driver):
 # WAIT FOR ATTACK PROCESSING
 # ============================================================
 
-def wait_for_attack_processing(driver):
+def wait_for_attack_processing(driver, clicked_element):
 
     """
-    Prevent duplicate attacks.
+    Confirm an attack click was actually processed before
+    letting the caller poll/click again.
 
-    The site can temporarily leave #battlebtn showing
-    Fight/Attack after the click has already been accepted.
-    Polls at BATTLE_POLL_WAIT - the same interval the rest of
-    the battle loop uses - instead of a separate, slower
-    hardcoded interval.
+    This checks the SPECIFIC element that was clicked, not a
+    fresh driver.find_element lookup. The reason: two genuinely
+    different turns can legitimately show the same button label
+    (e.g. "Fight" twice in a row) - comparing text alone can't
+    tell that apart from a click that hasn't been processed by
+    the site yet. A stale element reference (Selenium raises
+    StaleElementReferenceException when the DOM node it's
+    holding onto gets replaced/removed) is a much more reliable
+    "the page has genuinely moved on" signal, since it doesn't
+    depend on the new state's text differing from the old one.
+
+    Previously this treated a blank text read as automatic
+    confirmation, which could fire while a click was still
+    mid-processing (a blank/loading render can appear briefly
+    before the real next state settles) - that let the outer
+    loop re-click the same still-processing turn. Blank reads
+    are no longer treated as confirmation on their own.
+
+    Always returns within ATTACK_CONFIRM_TIMEOUT regardless, so
+    this can't hang even if staleness never fires for some
+    reason.
     """
 
     start = time.time()
 
-    initial_state = get_battle_button_text(driver)
+    try:
+
+        initial_state = normalize(
+            clicked_element.text
+        )
+
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
+
+        # Already gone right after the click - processed.
+        return True
 
     while time.time() - start < ATTACK_CONFIRM_TIMEOUT:
 
-        current_state = get_battle_button_text(driver)
+        try:
 
-        if not current_state:
+            current_state = normalize(
+                clicked_element.text
+            )
 
-            return True
+            if current_state and current_state != initial_state:
 
-        if current_state != initial_state:
+                return True
 
+        except (
+            StaleElementReferenceException,
+            WebDriverException,
+        ):
+
+            # The exact element we clicked is gone - the page
+            # moved on to a new state, even if the new button's
+            # text happens to match the old one.
             return True
 
         time.sleep(
@@ -862,7 +901,8 @@ def click_attack(driver):
             )
 
             wait_for_attack_processing(
-                driver
+                driver,
+                button
             )
 
             return True
