@@ -206,6 +206,17 @@ def _search_statistics():
         for name, count in encountered_stats["by_name"].items():
             print(f"  {name}: {count}")
 
+    if encountered_stats["caught"]:
+
+        print()
+        print(
+            f"Pokemon caught "
+            f"({encountered_stats['caught_total']} total):"
+        )
+
+        for name, count in encountered_stats["caught"].items():
+            print(f"  {name}: {count}")
+
     if encountered_stats["rare"]:
 
         print()

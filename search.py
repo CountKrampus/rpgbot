@@ -696,6 +696,7 @@ _encountered_pokemon = {
     "total": 0,
     "by_name": {},
     "rare": [],
+    "caught": {},
 }
 
 
@@ -822,13 +823,25 @@ def get_encountered_pokemon_stats():
                 {"name": "Shiny Goldeen", "level": 22, ...},
                 ...
             ],
+            "caught": {"Shellder": 10, "Slowpoke": 7, ...},
+            "caught_total": 17,
         }
+
+    "caught" is only incremented when capture_encounter()
+    actually returned True for that encounter - see
+    handle_search_encounter() below.
     """
 
     return {
         "total": _encountered_pokemon["total"],
         "by_name": dict(_encountered_pokemon["by_name"]),
         "rare": list(_encountered_pokemon["rare"]),
+        "caught": dict(
+            _encountered_pokemon.get("caught", {})
+        ),
+        "caught_total": sum(
+            _encountered_pokemon.get("caught", {}).values()
+        ),
     }
 
 
@@ -837,6 +850,7 @@ def reset_encountered_pokemon_stats():
     _encountered_pokemon["total"] = 0
     _encountered_pokemon["by_name"] = {}
     _encountered_pokemon["rare"] = []
+    _encountered_pokemon["caught"] = {}
 
 
 def _record_encounter(pokemon):
@@ -956,35 +970,111 @@ def click_encounter_fight(driver):
 
 def get_search_progress(driver):
 
+    """
+    Read the CURRENT MAP's real search progress directly
+    from Eclipse RPG.
+
+    The map page contains:
+
+        <td class="tnav map-stat">
+            <div id="times-searched">
+                <div id="times-searched-number">651</div>/2,500
+            </div>
+        </td>
+
+    Returns:
+
+        (651, 2500)
+
+    instead of searching the entire page for the first
+    number/number combination (which could pick up any
+    unrelated x/y pair on the page).
+    """
+
     try:
 
-        text = driver.find_element(
-            By.TAG_NAME,
-            "body"
-        ).text
+        # ----------------------------------------------------
+        # Current searches completed.
+        # ----------------------------------------------------
 
-        matches = re.findall(
-            r"\b(\d+)\s*/\s*(\d+)\b",
-            text
+        current_element = driver.find_element(
+            By.ID,
+            "times-searched-number"
         )
 
-        if matches:
+        current_text = (
+            current_element.text
+            .strip()
+            .replace(",", "")
+        )
 
-            current, maximum = matches[0]
+        if not current_text:
 
             return (
-                int(current),
-                int(maximum)
+                None,
+                None
             )
 
-    except Exception:
+        current = int(
+            current_text
+        )
 
-        pass
+        # ----------------------------------------------------
+        # Find the parent #times-searched element.
+        #
+        # The maximum is text outside the child div:
+        #
+        #     <div id="times-searched-number">651</div>/2,500
+        # ----------------------------------------------------
 
-    return (
-        None,
-        None
-    )
+        progress_element = driver.find_element(
+            By.ID,
+            "times-searched"
+        )
+
+        progress_text = (
+            progress_element.text
+            .strip()
+        )
+
+        # Example:
+        #
+        #     651/2,500
+        #
+        match = re.search(
+            r"/\s*([\d,]+)",
+            progress_text
+        )
+
+        if not match:
+
+            return (
+                current,
+                None
+            )
+
+        maximum = int(
+            match.group(1).replace(
+                ",",
+                ""
+            )
+        )
+
+        return (
+            current,
+            maximum
+        )
+
+    except (
+        NoSuchElementException,
+        ValueError,
+        WebDriverException,
+    ):
+
+        return (
+            None,
+            None
+        )
 
 
 # ============================================================
@@ -1266,6 +1356,26 @@ def handle_search_encounter(driver):
             "✓ Encounter capture completed."
         )
 
+        # ----------------------------------------------------
+        # Record the actual Pokémon as caught.
+        #
+        # capture_encounter() only returns True after the
+        # Pokémon has actually been captured successfully.
+        # ----------------------------------------------------
+
+        if encountered:
+
+            caught = _encountered_pokemon.setdefault(
+                "caught",
+                {}
+            )
+
+            pokemon_name = encountered["name"]
+
+            caught[pokemon_name] = (
+                caught.get(pokemon_name, 0) + 1
+            )
+
         return True
 
     print(
@@ -1473,6 +1583,52 @@ def search_complete_menu(
         print(
             f"Current map: {map_name}"
         )
+
+        encountered_stats = get_encountered_pokemon_stats()
+
+        if encountered_stats["caught_total"] > 0:
+
+            print()
+            print(
+                "POKEMON CAUGHT"
+            )
+
+            print(
+                "-" * 60
+            )
+
+            for name, count in encountered_stats["caught"].items():
+
+                print(
+                    f"{name:<25} x{count}"
+                )
+
+            print(
+                "-" * 60
+            )
+
+            print(
+                f"Total caught:      "
+                f"{encountered_stats['caught_total']}"
+            )
+
+            print(
+                f"Total encounters:  "
+                f"{encountered_stats['total']}"
+            )
+
+            if encountered_stats["total"] > 0:
+
+                rate = (
+                    encountered_stats["caught_total"]
+                    / encountered_stats["total"]
+                    * 100
+                )
+
+                print(
+                    f"Capture rate:      "
+                    f"{rate:.1f}%"
+                )
 
         print()
         print(
