@@ -21,7 +21,7 @@ from utils import (
 # CONFIGURATION
 # ============================================================
 
-MAX_BATTLES = 100
+MAX_BATTLES = 1000
 
 # Absolute safety limit for "battle until level".
 MAX_LEVEL_BATTLES = 10_000
@@ -143,17 +143,12 @@ def set_battle_difficulty(driver, difficulty):
 
         return False
 
-WAIT_LONG = 20
-BATTLE_END_TIMEOUT = 120
+WAIT_LONG = 10
+BATTLE_END_TIMEOUT = 60
 
-BETWEEN_BATTLES_WAIT = (2.0, 3.0)
-
-# After clicking Fight/Attack, wait for the site's JavaScript
-# to process the attack.
-ATTACK_PROCESSING_WAIT = (0.8, 1.5)
-
-# Polling interval while waiting for battle state changes.
-BATTLE_POLL_WAIT = (0.35, 0.65)
+BETWEEN_BATTLES_WAIT = (0.5, 0.8)
+ATTACK_PROCESSING_WAIT = (0.2, 0.4)
+BATTLE_POLL_WAIT = (0.10, 0.20)
 
 
 # ============================================================
@@ -738,7 +733,7 @@ def get_battle_exp_gain(driver):
                         text = normalize(text)
 
                         match = re.search(
-                            r"\+([\d,]+)\s+EXP",
+                            r"\+([\d,]+)\s+EXP\b",
                             text,
                             re.IGNORECASE
                         )
