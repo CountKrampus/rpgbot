@@ -286,11 +286,40 @@ def get_available_balls(driver):
 
     balls = []
 
+    ball_names = {
+        "PokeBall",
+        "Pokeball",
+        "Great Ball",
+        "Ultra Ball",
+        "Premier Ball",
+        "Luxury Ball",
+        "Quick Ball",
+        "Repeat Ball",
+        "Dusk Ball",
+        "Timer Ball",
+        "Net Ball",
+        "Nest Ball",
+        "Heal Ball",
+        "Friend Ball",
+        "Love Ball",
+        "Moon Ball",
+        "Level Ball",
+        "Lure Ball",
+        "Heavy Ball",
+        "Fast Ball",
+        "Master Ball",
+    }
+
     try:
 
-        elements = driver.find_elements(
-            By.CSS_SELECTOR,
-            "span[onclick*='item_choice(']"
+        holder = driver.find_element(
+            By.ID,
+            "B_ItemHolder"
+        )
+
+        elements = holder.find_elements(
+            By.XPATH,
+            "./span[.//img[@alt]]"
         )
 
         for element in elements:
@@ -310,36 +339,19 @@ def get_available_balls(driver):
                     or ""
                 ).strip()
 
-                if not alt:
+                if alt not in ball_names:
                     continue
 
-                lowered = normalize(alt)
+                onclick = (
+                    element.get_attribute("onclick")
+                    or ""
+                )
 
-                if (
-                    "pokeball" in lowered
-                    or "great ball" in lowered
-                    or "ultra ball" in lowered
-                    or "premier ball" in lowered
-                    or "luxury ball" in lowered
-                    or "quick ball" in lowered
-                    or "repeat ball" in lowered
-                    or "dusk ball" in lowered
-                    or "timer ball" in lowered
-                    or "net ball" in lowered
-                    or "nest ball" in lowered
-                    or "heal ball" in lowered
-                    or "friend ball" in lowered
-                    or "love ball" in lowered
-                    or "moon ball" in lowered
-                    or "level ball" in lowered
-                    or "lure ball" in lowered
-                    or "heavy ball" in lowered
-                    or "fast ball" in lowered
-                    or "master ball" in lowered
-                ):
+                if "item_choice(" not in onclick:
+                    continue
 
-                    if alt not in balls:
-                        balls.append(alt)
+                if alt not in balls:
+                    balls.append(alt)
 
             except (
                 StaleElementReferenceException,
@@ -348,7 +360,10 @@ def get_available_balls(driver):
 
                 continue
 
-    except Exception:
+    except (
+        StaleElementReferenceException,
+        WebDriverException,
+    ):
 
         pass
 
@@ -428,7 +443,6 @@ def select_best_ball(driver):
                     break
 
             if not selected:
-
                 selected = balls[0]
 
             print(
@@ -437,9 +451,14 @@ def select_best_ball(driver):
 
             try:
 
-                elements = driver.find_elements(
-                    By.CSS_SELECTOR,
-                    "span[onclick*='item_choice(']"
+                holder = driver.find_element(
+                    By.ID,
+                    "B_ItemHolder"
+                )
+
+                elements = holder.find_elements(
+                    By.XPATH,
+                    "./span[.//img[@alt]]"
                 )
 
                 for element in elements:
@@ -455,9 +474,7 @@ def select_best_ball(driver):
                         )
 
                         alt = (
-                            image.get_attribute(
-                                "alt"
-                            )
+                            image.get_attribute("alt")
                             or ""
                         ).strip()
 
@@ -466,9 +483,18 @@ def select_best_ball(driver):
                         ):
                             continue
 
+                        onclick = (
+                            element.get_attribute(
+                                "onclick"
+                            )
+                            or ""
+                        )
+
+                        if "item_choice(" not in onclick:
+                            continue
+
                         print(
-                            f"  ✓ Found {selected} "
-                            "selection."
+                            f"  ✓ Found {selected} selection."
                         )
 
                         if safe_click(
@@ -480,7 +506,9 @@ def select_best_ball(driver):
                                 f"  ✓ {selected} clicked."
                             )
 
-                            _record_ball_used(selected)
+                            _record_ball_used(
+                                selected
+                            )
 
                             return True
 
@@ -491,13 +519,14 @@ def select_best_ball(driver):
 
                         continue
 
-            except Exception as e:
+            except (
+                StaleElementReferenceException,
+                WebDriverException,
+            ):
 
-                print(
-                    f"  ⚠ Ball selection error: {e}"
-                )
+                pass
 
-        time.sleep(0.3)
+        time.sleep(0.2)
 
     print(
         "  ✗ No usable Poké Ball found."
@@ -1156,7 +1185,7 @@ def capture_encounter(driver):
 
     _capture_stats["encounters"] += 1
 
-    max_attempts = 3
+    max_attempts = 300
 
     for attempt in range(
         1,
