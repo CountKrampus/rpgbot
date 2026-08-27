@@ -383,72 +383,177 @@ def get_exclusive_maps(driver):
 
 def get_wild_pokemon(driver):
     """
-    Scrape the wild Pokemon listing on the CURRENTLY LOADED map
-    page. Returns a list of dicts:
+    Scrape the wild Pokémon listing on the CURRENTLY LOADED map.
 
-        {
-            "name": "Shiny Hyper Totodile",
-            "species_param": "HyperTotodile",
-            "dexed": True,
-        }
+    The Pokémon's full display name comes from the image alt
+    attribute. This is important because Eclipse can use names
+    such as:
 
-    species_param is the site's internal ?pokemon= key (form
-    modifiers like Hyper/Genesis, but not color variants like
-    Shiny/Crystal/Pearl - those only show up in the display
-    name).
+        Feebas
+        Shiny Feebas
+        SapphireGalaxyFeebas
+        Hyper Feebas
+        Crystal Feebas
+
+    The complete display name is preserved.
+
+    Returns:
+
+        [
+            {
+                "name": "SapphireGalaxyFeebas",
+                "species_param": "Feebas",
+                "dexed": True,
+            },
+            ...
+        ]
     """
 
     results = []
 
-    try:
+    selectors = [
+        "div.wild-pokes a.map-wild-poke",
+        "div.wild-pokes a[class*='map-wild-poke']",
+        "div.wild-pokes img[alt]",
+    ]
 
-        links = driver.find_elements(
-            By.CSS_SELECTOR,
-            "div.wild-pokes a.map-wild-poke",
-        )
+    elements = []
 
-    except WebDriverException:
-
-        return results
-
-    for link in links:
+    for selector in selectors:
 
         try:
 
-            href = link.get_attribute("href") or ""
-
-            param_match = re.search(
-                r"pokemon=([^&]+)",
-                href,
+            found = driver.find_elements(
+                By.CSS_SELECTOR,
+                selector
             )
 
-            species_param = (
-                param_match.group(1)
-                if param_match
-                else ""
-            )
+            if found:
 
-            class_attr = link.get_attribute("class") or ""
+                elements = found
+                break
 
-            dexed = "dexed" in class_attr.split()
+        except (
+            WebDriverException,
+            StaleElementReferenceException,
+        ):
 
-            image = link.find_element(
-                By.TAG_NAME,
-                "img",
-            )
+            continue
+
+    for element in elements:
+
+        try:
+
+            # ----------------------------------------------------
+            # If this is an <img>, use its parent <a>.
+            # ----------------------------------------------------
+
+            tag_name = (
+                element.tag_name or ""
+            ).lower()
+
+            if tag_name == "img":
+
+                image = element
+
+                try:
+
+                    link = element.find_element(
+                        By.XPATH,
+                        "./ancestor::a[1]"
+                    )
+
+                except NoSuchElementException:
+
+                    link = None
+
+            else:
+
+                link = element
+
+                image = link.find_element(
+                    By.TAG_NAME,
+                    "img"
+                )
+
+            # ----------------------------------------------------
+            # The ALT attribute is Eclipse's actual display name.
+            # ----------------------------------------------------
 
             name = (
-                image.get_attribute("alt") or ""
+                image.get_attribute("alt")
+                or ""
             ).strip()
 
             if not name:
                 continue
 
-            results.append({
-                "name": name,
-                "species_param": species_param,
-                "dexed": dexed,
-            })
+            # ----------------------------------------------------
+            # Extract the site's internal Pokémon parameter when
+            # available.
+            # ----------------------------------------------------
+
+            href = ""
+
+            if link is not None:
+
+                href = (
+                    link.get_attribute("href")
+                    or ""
+                )
+
+            param_match = re.search(
+                r"[?&]pokemon=([^&]+)",
+                href,
+                re.IGNORECASE
+            )
+
+            species_param = ""
+
+            if param_match:
+
+                species_param = param_match.group(
+                    1
+                )
+
+            # ----------------------------------------------------
+            # Determine whether this Pokémon is registered.
+            # ----------------------------------------------------
+
+            dexed = False
+
+            if link is not None:
+
+                class_attr = (
+                    link.get_attribute("class")
+                    or ""
+                )
+
+                dexed = (
+                    "dexed"
+                    in class_attr.split()
+                )
+
+            # ----------------------------------------------------
+            # Avoid duplicates.
+            # ----------------------------------------------------
+
+            duplicate = any(
+                normalize(existing["name"])
+                == normalize(name)
+                for existing in results
+            )
+
+            if duplicate:
+                continue
+
+            results.append(
+                {
+                    "name": name,
+                    "species_param": species_param,
+                    "dexed": dexed,
+                }
+            )
 
         except (
             StaleElementReferenceException,
@@ -460,87 +565,166 @@ def get_wild_pokemon(driver):
 
     return results
 
-
 def search_pokemon_across_maps(
     driver,
     query,
     progress_callback=None,
 ):
     """
-    Search every known map (regular + unlocked exclusive) for
-    wild Pokemon whose display name contains `query`
-    (case-insensitive substring match, so "gastly" matches
-    "Gastly", "Shiny Gastly", "Crystal Gastly", etc - this
-    covers variant/form search too, since the variant is part
-    of the display name).
+    Search EVERY available map for a Pokémon.
 
-    This visits every map page to build the result, since
-    there's no known site-wide search endpoint - it can take a
-    while for a large map list.
+    Matching is case-insensitive substring matching.
 
-    progress_callback(map_name, index, total), if given, is
-    called right before each map is checked, so a caller can
-    show live progress.
+    This intentionally allows:
 
-    Returns a dict of only the maps with at least one match:
+        Feebas
+            -> Feebas
 
-        {
-            "Manaphy's Haven": [
-                {"name": "Shiny Totodile", ...},
-                ...
-            ],
-        }
+        Feebas
+            -> SapphireGalaxyFeebas
+
+        Feebas
+            -> Shiny Feebas
+
+        Feebas
+            -> HyperFeebas
+
+    The complete display name returned by Eclipse is preserved
+    in the result.
+
+    Searches:
+        - Every regular map in MAPS
+        - Every currently unlocked exclusive map
+
+    Returns only maps where a matching Pokémon was found.
     """
 
-    wanted = normalize(query)
+    wanted = normalize(
+        query
+    )
+
+    if not wanted:
+
+        return {}
 
     matches_by_map = {}
 
-    exclusive_maps = get_exclusive_maps(driver)
+    exclusive_maps = get_exclusive_maps(
+        driver
+    )
 
-    total = len(MAPS) + len(exclusive_maps)
-
-    index = 0
+    all_maps = []
 
     for map_name in MAPS:
 
-        index += 1
-
-        if progress_callback:
-            progress_callback(map_name, index, total)
-
-        if not open_map(driver, map_name):
-            continue
-
-        wild = get_wild_pokemon(driver)
-
-        found = [
-            pokemon for pokemon in wild
-            if wanted in normalize(pokemon["name"])
-        ]
-
-        if found:
-            matches_by_map[map_name] = found
+        all_maps.append(
+            {
+                "name": map_name,
+                "exclusive": False,
+                "area": None,
+            }
+        )
 
     for area in exclusive_maps:
 
-        index += 1
+        all_maps.append(
+            {
+                "name": area["name"],
+                "exclusive": True,
+                "area": area,
+            }
+        )
 
-        if progress_callback:
-            progress_callback(area["name"], index, total)
+    total = len(
+        all_maps
+    )
 
-        if not open_exclusive_area(driver, area):
-            continue
+    for index, map_info in enumerate(
+        all_maps,
+        1
+    ):
 
-        wild = get_wild_pokemon(driver)
-
-        found = [
-            pokemon for pokemon in wild
-            if wanted in normalize(pokemon["name"])
+        map_name = map_info[
+            "name"
         ]
 
+        if progress_callback:
+
+            progress_callback(
+                map_name,
+                index,
+                total
+            )
+
+        # --------------------------------------------------------
+        # Open the map.
+        # --------------------------------------------------------
+
+        if map_info["exclusive"]:
+
+            opened = open_exclusive_area(
+                driver,
+                map_info["area"]
+            )
+
+        else:
+
+            opened = open_map(
+                driver,
+                map_name
+            )
+
+        if not opened:
+
+            continue
+
+        # --------------------------------------------------------
+        # Read the actual wild Pokémon listing.
+        # --------------------------------------------------------
+
+        wild = get_wild_pokemon(
+            driver
+        )
+
+        found = []
+
+        for pokemon in wild:
+
+            pokemon_name = normalize(
+                pokemon.get(
+                    "name",
+                    ""
+                )
+            )
+
+            # ----------------------------------------------------
+            # IMPORTANT:
+            #
+            # Use substring matching here.
+            #
+            # This is what makes:
+            #
+            #   Feebas
+            #
+            # match:
+            #
+            #   SapphireGalaxyFeebas
+            # ----------------------------------------------------
+
+            if (
+                wanted
+                and wanted in pokemon_name
+            ):
+
+                found.append(
+                    pokemon
+                )
+
         if found:
-            matches_by_map[area["name"]] = found
+
+            matches_by_map[
+                map_name
+            ] = found
 
     return matches_by_map
 
@@ -1664,27 +1848,26 @@ def run_searches(
 # TARGET POKEMON HUNTING MODE
 # ============================================================
 
+# ============================================================
+# TARGET POKEMON HUNTING MODE
+# ============================================================
+
 def target_pokemon_mode(driver):
     """
-    Prompt for a Pokémon to hunt, pick a map, then run searches
-    that skip every non-matching encounter and only attempt
-    capture on the target. Reuses the exact same map-opening,
-    search-progress, and run_searches() machinery as normal
-    searching - target_pokemon is just threaded through.
+    Search every map for a specific Pokémon.
+
+    The bot first scans the wild-Pokémon listings on every
+    regular and unlocked exclusive map to determine which maps
+    actually contain the requested Pokémon.
+
+    It then searches each matching map and ONLY captures the
+    requested Pokémon. Non-target encounters are skipped.
     """
 
     print()
-    print(
-        "=" * 60
-    )
-
-    print(
-        "HUNT SPECIFIC POKÉMON"
-    )
-
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
+    print("HUNT SPECIFIC POKÉMON")
+    print("=" * 60)
 
     target_pokemon = get_target_pokemon()
 
@@ -1693,141 +1876,206 @@ def target_pokemon_mode(driver):
         f"★ Target Pokémon: {target_pokemon}"
     )
 
+    print()
+    print(
+        "Scanning all maps for "
+        f"{target_pokemon}..."
+    )
+
+    print(
+        "This may take a moment while the "
+        "map listings are checked."
+    )
+
     # --------------------------------------------------------
-    # Choose map.
+    # Progress display while scanning maps.
     # --------------------------------------------------------
 
-    exclusive_maps = get_exclusive_maps(
-        driver
+    def scan_progress(
+        map_name,
+        index,
+        total
+    ):
+
+        print(
+            f"  [{index}/{total}] "
+            f"Checking {map_name}..."
+        )
+
+    # --------------------------------------------------------
+    # Find EVERY map containing the target.
+    #
+    # This searches:
+    #   - all regular maps
+    #   - all unlocked exclusive maps
+    #
+    # search_pokemon_across_maps() already handles both.
+    # --------------------------------------------------------
+
+    matches_by_map = search_pokemon_across_maps(
+        driver,
+        target_pokemon,
+        progress_callback=scan_progress
+    )
+
+    if not matches_by_map:
+
+        print()
+        print(
+            "=" * 60
+        )
+
+        print(
+            "NO MATCHING MAPS FOUND"
+        )
+
+        print(
+            "=" * 60
+        )
+
+        print()
+        print(
+            f"Could not find "
+            f"'{target_pokemon}' "
+            "on any currently available map."
+        )
+
+        input(
+            "\nPress Enter to return..."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Display all maps where the target exists.
+    # --------------------------------------------------------
+
+    matching_maps = list(
+        matches_by_map.keys()
     )
 
     print()
     print(
-        "REGULAR MAPS"
+        "=" * 60
+    )
+
+    print(
+        f"FOUND {target_pokemon.upper()} "
+        f"ON {len(matching_maps)} MAP(S)"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    for index, map_name in enumerate(
+        matching_maps,
+        1
+    ):
+
+        matches = matches_by_map[
+            map_name
+        ]
+
+        names = ", ".join(
+            sorted(
+                {
+                    pokemon["name"]
+                    for pokemon in matches
+                }
+            )
+        )
+
+        print()
+        print(
+            f"{index}. {map_name}"
+        )
+
+        print(
+            f"   Available as: {names}"
+        )
+
+    # --------------------------------------------------------
+    # Ask how many searches to perform PER
+    # matching map.
+    #
+    # Default = the remaining searches on
+    # the first map. The same requested
+    # amount is then used on every matching
+    # map, unless that map has fewer remaining.
+    # --------------------------------------------------------
+
+    print()
+    print(
+        "-" * 60
+    )
+
+    print(
+        "SEARCH COUNT"
     )
 
     print(
         "-" * 60
     )
 
-    for i, map_name in enumerate(
-        MAPS,
-        1
-    ):
-
-        print(
-            f"{i:2}. {map_name}"
-        )
-
-    exclusive_start = len(MAPS) + 1
-
-    if exclusive_maps:
-
-        print()
-        print(
-            "EXCLUSIVE LEGENDARY AREAS"
-        )
-
-        print(
-            "-" * 60
-        )
-
-        for i, area in enumerate(
-            exclusive_maps,
-            exclusive_start
-        ):
-
-            print(
-                f"{i:2}. {area['name']}"
-            )
-
-    back_number = (
-        len(MAPS)
-        + len(exclusive_maps)
-        + 1
-    )
-
     print(
-        f"{back_number:2}. Back"
+        "The requested number of searches "
+        "will be performed on each matching map."
     )
 
-    while True:
+    # Open the first matching map so we can
+    # read its real Eclipse progress.
 
-        choice = input(
-            f"\nChoose map number "
-            f"(1-{back_number}): "
-        ).strip()
+    first_map = matching_maps[0]
 
-        try:
+    first_match = matches_by_map[
+        first_map
+    ]
 
-            number = int(
-                choice
-            )
+    first_is_exclusive = (
+        first_map not in MAPS
+    )
 
-        except ValueError:
+    first_area = None
+
+    if first_is_exclusive:
+
+        exclusive_maps = get_exclusive_maps(
+            driver
+        )
+
+        for area in exclusive_maps:
+
+            if area["name"] == first_map:
+
+                first_area = area
+                break
+
+        if first_area is None:
 
             print(
-                "✗ Invalid choice."
+                "✗ Could not resolve exclusive "
+                f"map '{first_map}'."
             )
-
-            continue
-
-        if number == back_number:
 
             return
 
-        if 1 <= number <= len(MAPS):
-
-            map_name = MAPS[number - 1]
-
-            is_exclusive = False
-            area = None
-
-            break
-
-        if (
-            exclusive_maps
-            and number <= (len(MAPS) + len(exclusive_maps))
-        ):
-
-            exclusive_index = (
-                number - len(MAPS) - 1
-            )
-
-            area = exclusive_maps[exclusive_index]
-
-            map_name = area["name"]
-
-            is_exclusive = True
-
-            break
-
-        print(
-            "✗ Invalid choice."
-        )
-
-    # --------------------------------------------------------
-    # Open selected map.
-    # --------------------------------------------------------
-
-    if is_exclusive:
-
         opened = open_exclusive_area(
             driver,
-            area
+            first_area
         )
 
     else:
 
         opened = open_map(
             driver,
-            map_name
+            first_map
         )
 
     if not opened:
 
         print(
-            "✗ Could not open selected map."
+            f"✗ Could not open {first_map}."
         )
 
         return
@@ -1836,7 +2084,10 @@ def target_pokemon_mode(driver):
         driver
     )
 
-    if current is not None:
+    if (
+        current is not None
+        and maximum is not None
+    ):
 
         remaining = max(
             0,
@@ -1845,11 +2096,13 @@ def target_pokemon_mode(driver):
 
         print()
         print(
-            f"Current progress: {current}/{maximum}"
+            f"{first_map} progress: "
+            f"{current}/{maximum}"
         )
 
         print(
-            f"Remaining searches: {remaining}"
+            f"Remaining searches: "
+            f"{remaining}"
         )
 
     else:
@@ -1857,14 +2110,15 @@ def target_pokemon_mode(driver):
         remaining = 500
 
     answer = input(
-        f"\nHow many searches? [default {remaining}]: "
+        "\nHow many searches per map? "
+        f"[default {remaining}]: "
     ).strip()
 
     if answer:
 
         try:
 
-            searches = int(
+            searches_per_map = int(
                 answer
             )
 
@@ -1878,14 +2132,14 @@ def target_pokemon_mode(driver):
 
     else:
 
-        searches = remaining
+        searches_per_map = remaining
 
-    searches = max(
+    searches_per_map = max(
         0,
-        searches
+        searches_per_map
     )
 
-    if searches == 0:
+    if searches_per_map == 0:
 
         print(
             "No searches selected."
@@ -1894,81 +2148,340 @@ def target_pokemon_mode(driver):
         return
 
     # --------------------------------------------------------
-    # Reset session Pokémon statistics for a clean read on
-    # this specific hunt.
+    # Reset encounter statistics for this
+    # target-hunting session.
     # --------------------------------------------------------
 
     reset_encountered_pokemon_stats()
 
-    print()
-    print(
-        "=" * 60
-    )
+    total_searches_completed = 0
+    maps_completed = 0
 
-    print(
-        f"HUNTING: {target_pokemon}"
-    )
+    # --------------------------------------------------------
+    # Hunt each applicable map.
+    # --------------------------------------------------------
 
-    print(
-        "=" * 60
-    )
-
-    print()
-
-    if not run_searches(
-        driver,
-        map_name,
-        searches,
-        is_exclusive=is_exclusive,
-        area=area,
-        target_pokemon=target_pokemon
+    for map_index, map_name in enumerate(
+        matching_maps,
+        1
     ):
 
         print()
         print(
-            "✗ Target search session stopped."
+            "=" * 60
         )
 
-        return
+        print(
+            f"TARGET HUNT "
+            f"[{map_index}/{len(matching_maps)}]"
+        )
 
-    print()
-    print(
-        "=" * 60
-    )
+        print(
+            "=" * 60
+        )
 
-    print(
-        "TARGET SEARCH COMPLETE"
-    )
+        print(
+            f"Target: {target_pokemon}"
+        )
 
-    print(
-        "=" * 60
-    )
+        print(
+            f"Map:    {map_name}"
+        )
+
+        # ----------------------------------------------------
+        # Resolve whether this is a regular or exclusive map.
+        # ----------------------------------------------------
+
+        is_exclusive = (
+            map_name not in MAPS
+        )
+
+        area = None
+
+        if is_exclusive:
+
+            exclusive_maps = get_exclusive_maps(
+                driver
+            )
+
+            for exclusive_area in exclusive_maps:
+
+                if (
+                    exclusive_area["name"]
+                    == map_name
+                ):
+
+                    area = exclusive_area
+                    break
+
+            if area is None:
+
+                print(
+                    f"⚠ Could not resolve "
+                    f"exclusive map '{map_name}'."
+                )
+
+                print(
+                    "→ Skipping this map."
+                )
+
+                continue
+
+            opened = open_exclusive_area(
+                driver,
+                area
+            )
+
+        else:
+
+            opened = open_map(
+                driver,
+                map_name
+            )
+
+        if not opened:
+
+            print(
+                f"✗ Could not open "
+                f"{map_name}."
+            )
+
+            print(
+                "→ Skipping this map."
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Never exceed this map's actual remaining searches.
+        # ----------------------------------------------------
+
+        current, maximum = get_search_progress(
+            driver
+        )
+
+        map_searches = searches_per_map
+
+        if (
+            current is not None
+            and maximum is not None
+        ):
+
+            map_remaining = max(
+                0,
+                maximum - current
+            )
+
+            map_searches = min(
+                searches_per_map,
+                map_remaining
+            )
+
+            print()
+            print(
+                f"Map progress: "
+                f"{current}/{maximum}"
+            )
+
+            print(
+                f"Target-hunt searches: "
+                f"{map_searches}"
+            )
+
+        if map_searches <= 0:
+
+            print(
+                "✓ This map is already complete."
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Run the actual searches.
+        #
+        # target_pokemon causes run_searches()
+        # to skip every non-target encounter.
+        # ----------------------------------------------------
+
+        result = run_searches(
+            driver,
+            map_name,
+            map_searches,
+            is_exclusive=is_exclusive,
+            area=area,
+            target_pokemon=target_pokemon
+        )
+
+        total_searches_completed += (
+            map_searches
+        )
+
+        if result:
+
+            maps_completed += 1
+
+            print()
+            print(
+                f"✓ Finished hunting "
+                f"{map_name}."
+            )
+
+        else:
+
+            print()
+            print(
+                f"⚠ Search session on "
+                f"{map_name} stopped."
+            )
+
+            print(
+                "→ Continuing to the next "
+                "matching map."
+            )
+
+    # --------------------------------------------------------
+    # Final target-hunt results.
+    # --------------------------------------------------------
 
     stats = get_encountered_pokemon_stats()
 
     print()
     print(
-        f"Target:          {target_pokemon}"
+        "=" * 60
     )
 
     print(
-        f"Searches:        {searches}"
+        "TARGET HUNT COMPLETE"
     )
 
     print(
-        f"Encounters:      {stats['total']}"
-    )
-
-    print(
-        f"Pokémon caught:  {stats['caught_total']}"
+        "=" * 60
     )
 
     print()
+    print(
+        f"Target Pokémon    : "
+        f"{target_pokemon}"
+    )
+
+    print(
+        f"Maps found        : "
+        f"{len(matching_maps)}"
+    )
+
+    print(
+        f"Maps searched     : "
+        f"{maps_completed}"
+    )
+
+    print(
+        f"Searches completed: "
+        f"{total_searches_completed}"
+    )
+
+    print(
+        f"Total encounters  : "
+        f"{stats['total']}"
+    )
+
+    # --------------------------------------------------------
+    # Show only the target's encounters/captures prominently.
+    # --------------------------------------------------------
+
+    target_encounters = stats[
+        "by_name"
+    ].get(
+        target_pokemon,
+        0
+    )
+
+    target_caught = stats[
+        "caught"
+    ].get(
+        target_pokemon,
+        0
+    )
+
+    print()
+    print(
+        "-" * 60
+    )
+
+    print(
+        "TARGET RESULTS"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    print(
+        f"{target_pokemon:<25} "
+        f"encounters: {target_encounters}"
+    )
+
+    print(
+        f"{target_pokemon:<25} "
+        f"caught:    {target_caught}"
+    )
+
+    if target_encounters > 0:
+
+        capture_rate = (
+            target_caught
+            / target_encounters
+            * 100
+        )
+
+        print(
+            f"Target capture rate: "
+            f"{capture_rate:.1f}%"
+        )
+
+    # --------------------------------------------------------
+    # Show other encounters as information only.
+    # They were NOT captured.
+    # --------------------------------------------------------
+
+    other_encounters = {
+        name: count
+        for name, count
+        in stats["by_name"].items()
+        if name != target_pokemon
+    }
+
+    if other_encounters:
+
+        print()
+        print(
+            "-" * 60
+        )
+
+        print(
+            "NON-TARGET ENCOUNTERS"
+        )
+
+        print(
+            "-" * 60
+        )
+
+        for name, count in sorted(
+            other_encounters.items()
+        ):
+
+            print(
+                f"{name:<25} "
+                f"x{count}"
+            )
+
+    print()
+    print(
+        "=" * 60
+    )
 
     input(
         "Press Enter to return..."
     )
-
 
 # ============================================================
 # ASK WHAT TO DO AFTER SEARCHES
