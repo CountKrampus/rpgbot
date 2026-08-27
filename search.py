@@ -383,169 +383,140 @@ def get_exclusive_maps(driver):
 
 def get_wild_pokemon(driver):
     """
-    Scrape the wild Pokémon listing on the CURRENTLY LOADED map.
+    Read the complete wild-Pokémon listing from the currently
+    loaded map.
 
-    The Pokémon's full display name comes from the image alt
-    attribute. This is important because Eclipse can use names
-    such as:
+    Eclipse can expose the listing slightly after the map itself
+    finishes navigation, so this function waits for the listing
+    rather than assuming it is immediately available.
 
-        Feebas
-        Shiny Feebas
-        SapphireGalaxyFeebas
-        Hyper Feebas
-        Crystal Feebas
-
-    The complete display name is preserved.
-
-    Returns:
-
-        [
-            {
-                "name": "SapphireGalaxyFeebas",
-                "species_param": "Feebas",
-                "dexed": True,
-            },
-            ...
-        ]
+    Both the visible display name and Eclipse's internal
+    pokemon= parameter are preserved.
     """
 
     results = []
 
-    selectors = [
-        "div.wild-pokes a.map-wild-poke",
-        "div.wild-pokes a[class*='map-wild-poke']",
-        "div.wild-pokes img[alt]",
-    ]
+    # ============================================================
+    # WAIT FOR WILD POKEMON LISTING
+    # ============================================================
 
-    elements = []
+    start = time.time()
 
-    for selector in selectors:
+    while time.time() - start < WAIT_LONG:
 
         try:
 
-            found = driver.find_elements(
+            elements = driver.find_elements(
                 By.CSS_SELECTOR,
-                selector
+                "div.wild-pokes a.map-wild-poke"
             )
 
-            if found:
+            if elements:
 
-                elements = found
                 break
 
-        except (
-            WebDriverException,
-            StaleElementReferenceException,
-        ):
+        except Exception:
 
-            continue
+            pass
 
-    for element in elements:
+        # Also allow the page source to satisfy the wait.
+        try:
+
+            source = driver.page_source
+
+            if (
+                source
+                and "map-wild-poke" in source
+                and "wild-pokes" in source
+            ):
+
+                break
+
+        except Exception:
+
+            pass
+
+        time.sleep(0.25)
+
+    # ============================================================
+    # METHOD 1 — SELENIUM DOM
+    # ============================================================
+
+    try:
+
+        elements = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.wild-pokes a.map-wild-poke"
+        )
+
+    except Exception:
+
+        elements = []
+
+    for link in elements:
 
         try:
 
-            # ----------------------------------------------------
-            # If this is an <img>, use its parent <a>.
-            # ----------------------------------------------------
+            images = link.find_elements(
+                By.CSS_SELECTOR,
+                "img[alt]"
+            )
 
-            tag_name = (
-                element.tag_name or ""
-            ).lower()
+            if not images:
+                continue
 
-            if tag_name == "img":
+            name = ""
 
-                image = element
+            for image in images:
 
                 try:
 
-                    link = element.find_element(
-                        By.XPATH,
-                        "./ancestor::a[1]"
-                    )
+                    alt = (
+                        image.get_attribute("alt")
+                        or ""
+                    ).strip()
 
-                except NoSuchElementException:
+                except Exception:
 
-                    link = None
+                    alt = ""
 
-            else:
+                if alt:
 
-                link = element
-
-                image = link.find_element(
-                    By.TAG_NAME,
-                    "img"
-                )
-
-            # ----------------------------------------------------
-            # The ALT attribute is Eclipse's actual display name.
-            # ----------------------------------------------------
-
-            name = (
-                image.get_attribute("alt")
-                or ""
-            ).strip()
+                    name = alt
+                    break
 
             if not name:
                 continue
 
-            # ----------------------------------------------------
-            # Extract the site's internal Pokémon parameter when
-            # available.
-            # ----------------------------------------------------
+            href = (
+                link.get_attribute("href")
+                or ""
+            ).strip()
 
-            href = ""
-
-            if link is not None:
-
-                href = (
-                    link.get_attribute("href")
-                    or ""
-                )
-
-            param_match = re.search(
-                r"[?&]pokemon=([^&]+)",
+            match = re.search(
+                r"[?&]pokemon=([^&#]+)",
                 href,
                 re.IGNORECASE
             )
 
             species_param = ""
 
-            if param_match:
+            if match:
 
-                species_param = param_match.group(
-                    1
+                species_param = (
+                    match.group(1)
+                    .strip()
                 )
 
-            # ----------------------------------------------------
-            # Determine whether this Pokémon is registered.
-            # ----------------------------------------------------
-
-            dexed = False
-
-            if link is not None:
-
-                class_attr = (
-                    link.get_attribute("class")
-                    or ""
-                )
-
-                dexed = (
-                    "dexed"
-                    in class_attr.split()
-                )
-
-            # ----------------------------------------------------
-            # Avoid duplicates.
-            # ----------------------------------------------------
-
-            duplicate = any(
-                normalize(existing["name"])
-                == normalize(name)
-                for existing in results
+            class_attr = (
+                link.get_attribute("class")
+                or ""
             )
 
-            if duplicate:
-                continue
+            dexed = (
+                "dexed"
+                in class_attr.split()
+            )
 
             results.append(
                 {
@@ -563,7 +534,171 @@ def get_wild_pokemon(driver):
 
             continue
 
-    return results
+    # ============================================================
+    # METHOD 2 — PAGE SOURCE
+    #
+    # Always inspect page_source as well.
+    #
+    # This supplements Selenium rather than acting as an
+    # all-or-nothing fallback.
+    # ============================================================
+
+    try:
+
+        source = driver.page_source
+
+    except Exception:
+
+        source = ""
+
+    if source:
+
+        anchor_pattern = re.compile(
+            r"<a\b[^>]*"
+            r'class=["\'][^"\']*\bmap-wild-poke\b[^"\']*["\']'
+            r"[^>]*>"
+            r".*?"
+            r"</a>",
+            re.IGNORECASE
+            | re.DOTALL
+        )
+
+        for block_match in anchor_pattern.finditer(
+            source
+        ):
+
+            block = block_match.group(0)
+
+            # ----------------------------------------------------
+            # Internal Pokémon identifier
+            # ----------------------------------------------------
+
+            pokemon_match = re.search(
+                r'[?&]pokemon=([^"&\'#]+)',
+                block,
+                re.IGNORECASE
+            )
+
+            species_param = ""
+
+            if pokemon_match:
+
+                species_param = (
+                    pokemon_match.group(1)
+                    .strip()
+                )
+
+            # ----------------------------------------------------
+            # Display name
+            # ----------------------------------------------------
+
+            alt_matches = re.findall(
+                r"<img\b[^>]*\balt=[\"']([^\"']+)[\"']",
+                block,
+                re.IGNORECASE
+            )
+
+            if not alt_matches:
+                continue
+
+            name = ""
+
+            for alt in alt_matches:
+
+                alt = (
+                    alt
+                    or ""
+                ).strip()
+
+                if alt:
+
+                    name = alt
+                    break
+
+            if not name:
+                continue
+
+            # ----------------------------------------------------
+            # Pokédex registration
+            # ----------------------------------------------------
+
+            class_match = re.search(
+                r'class=["\']([^"\']*\bmap-wild-poke\b[^"\']*)["\']',
+                block,
+                re.IGNORECASE
+            )
+
+            dexed = False
+
+            if class_match:
+
+                dexed = (
+                    "dexed"
+                    in class_match.group(1).split()
+                )
+
+            results.append(
+                {
+                    "name": name,
+                    "species_param": species_param,
+                    "dexed": dexed,
+                }
+            )
+
+    # ============================================================
+    # REMOVE DUPLICATES
+    #
+    # Keep different internal identifiers even when display names
+    # happen to be identical.
+    # ============================================================
+
+    unique = []
+
+    seen = set()
+
+    for pokemon in results:
+
+        name = (
+            pokemon.get(
+                "name",
+                ""
+            )
+            or ""
+        ).strip()
+
+        species_param = (
+            pokemon.get(
+                "species_param",
+                ""
+            )
+            or ""
+        ).strip()
+
+        key = (
+            normalize(name),
+            normalize(species_param),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+
+        unique.append(
+            {
+                "name": name,
+                "species_param": species_param,
+                "dexed": bool(
+                    pokemon.get(
+                        "dexed",
+                        False
+                    )
+                ),
+            }
+        )
+
+    return unique
+
 
 def search_pokemon_across_maps(
     driver,
@@ -571,40 +706,32 @@ def search_pokemon_across_maps(
     progress_callback=None,
 ):
     """
-    Search EVERY available map for a Pokémon.
+    Find every available map containing the requested Pokémon.
 
-    Matching is case-insensitive substring matching.
+    Matching checks BOTH Eclipse identifiers:
 
-    This intentionally allows:
+        1. Display name
+           e.g. "Sapphire Galaxy Feebas"
 
-        Feebas
-            -> Feebas
+        2. Internal species parameter
+           e.g. "GalaxyFeebas"
 
-        Feebas
-            -> SapphireGalaxyFeebas
-
-        Feebas
-            -> Shiny Feebas
+    This allows a base Pokémon search such as:
 
         Feebas
-            -> HyperFeebas
 
-    The complete display name returned by Eclipse is preserved
-    in the result.
+    to discover variants such as:
 
-    Searches:
-        - Every regular map in MAPS
-        - Every currently unlocked exclusive map
-
-    Returns only maps where a matching Pokémon was found.
+        Feebas
+        Dark Feebas
+        GalaxyFeebas
+        Sapphire Galaxy Feebas
+        SapphireGalaxyFeebas
     """
 
-    wanted = normalize(
-        query
-    )
+    wanted = normalize(query)
 
     if not wanted:
-
         return {}
 
     matches_by_map = {}
@@ -616,7 +743,6 @@ def search_pokemon_across_maps(
     all_maps = []
 
     for map_name in MAPS:
-
         all_maps.append(
             {
                 "name": map_name,
@@ -626,7 +752,6 @@ def search_pokemon_across_maps(
         )
 
     for area in exclusive_maps:
-
         all_maps.append(
             {
                 "name": area["name"],
@@ -635,30 +760,25 @@ def search_pokemon_across_maps(
             }
         )
 
-    total = len(
-        all_maps
-    )
+    total = len(all_maps)
 
     for index, map_info in enumerate(
         all_maps,
         1
     ):
 
-        map_name = map_info[
-            "name"
-        ]
+        map_name = map_info["name"]
 
         if progress_callback:
-
             progress_callback(
                 map_name,
                 index,
                 total
             )
 
-        # --------------------------------------------------------
-        # Open the map.
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # Open map
+        # ----------------------------------------------------
 
         if map_info["exclusive"]:
 
@@ -675,45 +795,50 @@ def search_pokemon_across_maps(
             )
 
         if not opened:
-
             continue
 
-        # --------------------------------------------------------
-        # Read the actual wild Pokémon listing.
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # Get Pokémon listings
+        # ----------------------------------------------------
 
         wild = get_wild_pokemon(
             driver
         )
 
+
         found = []
 
         for pokemon in wild:
 
-            pokemon_name = normalize(
+            display_name = normalize(
                 pokemon.get(
                     "name",
                     ""
                 )
             )
 
-            # ----------------------------------------------------
-            # IMPORTANT:
-            #
-            # Use substring matching here.
-            #
-            # This is what makes:
-            #
-            #   Feebas
-            #
-            # match:
-            #
-            #   SapphireGalaxyFeebas
-            # ----------------------------------------------------
+            species_param = normalize(
+                pokemon.get(
+                    "species_param",
+                    ""
+                )
+            )
+
+            # ------------------------------------------------
+            # Match either Eclipse identifier.
+            # ------------------------------------------------
+
+            display_match = (
+                wanted in display_name
+            )
+
+            parameter_match = (
+                wanted in species_param
+            )
 
             if (
-                wanted
-                and wanted in pokemon_name
+                display_match
+                or parameter_match
             ):
 
                 found.append(
