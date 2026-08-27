@@ -1018,12 +1018,6 @@ def click_capture_continue(driver):
 
                         time.sleep(0.3)
 
-                    print(
-                        "  ⚠ Continue was clicked, "
-                        "but navigation could not "
-                        "be verified."
-                    )
-
                     return True
 
             except (
