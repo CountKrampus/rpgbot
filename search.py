@@ -10,6 +10,7 @@ from selenium.common.exceptions import (
 )
 
 from capture import capture_encounter
+from database_search import hunt_pokemon as db_hunt_pokemon
 from utils import (
     safe_click,
     normalize,
@@ -2051,14 +2052,18 @@ def run_searches(
 
 def target_pokemon_mode(driver):
     """
-    Search every map for a specific Pokémon.
+    Hunt a specific Pokémon using eclipse_maps.db to instantly
+    look up which maps contain it, instead of live-scanning
+    every map's wild-Pokémon listing.
 
-    The bot first scans the wild-Pokémon listings on every
-    regular and unlocked exclusive map to determine which maps
-    actually contain the requested Pokémon.
+    Only currently-unlocked maps are hunted (a locked exclusive
+    area can show up as a database match, but can't actually be
+    searched until it's unlocked on this account).
 
-    It then searches each matching map and ONLY captures the
-    requested Pokémon. Non-target encounters are skipped.
+    The database only answers "which map" - the actual
+    searching, encounter detection, and capture logic below is
+    unchanged and still runs live via Selenium. Non-target
+    encounters are skipped, never fought or captured.
     """
 
     print()
@@ -2073,49 +2078,18 @@ def target_pokemon_mode(driver):
         f"★ Target Pokémon: {target_pokemon}"
     )
 
-    print()
-    print(
-        "Scanning all maps for "
-        f"{target_pokemon}..."
+    # --------------------------------------------------------
+    # Find every map containing the target, via the database
+    # instead of a live scan of every map page. hunt_pokemon()
+    # already prints a per-map breakdown (with locked/unlocked
+    # status) and returns the same info as structured results.
+    # --------------------------------------------------------
+
+    db_results = db_hunt_pokemon(
+        target_pokemon
     )
 
-    print(
-        "This may take a moment while the "
-        "map listings are checked."
-    )
-
-    # --------------------------------------------------------
-    # Progress display while scanning maps.
-    # --------------------------------------------------------
-
-    def scan_progress(
-        map_name,
-        index,
-        total
-    ):
-
-        print(
-            f"  [{index}/{total}] "
-            f"Checking {map_name}..."
-        )
-
-    # --------------------------------------------------------
-    # Find EVERY map containing the target.
-    #
-    # This searches:
-    #   - all regular maps
-    #   - all unlocked exclusive maps
-    #
-    # search_pokemon_across_maps() already handles both.
-    # --------------------------------------------------------
-
-    matches_by_map = search_pokemon_across_maps(
-        driver,
-        target_pokemon,
-        progress_callback=scan_progress
-    )
-
-    if not matches_by_map:
+    if not db_results:
 
         print()
         print(
@@ -2123,7 +2097,7 @@ def target_pokemon_mode(driver):
         )
 
         print(
-            "NO MATCHING MAPS FOUND"
+            "NO DATABASE MATCHES FOUND"
         )
 
         print(
@@ -2132,9 +2106,16 @@ def target_pokemon_mode(driver):
 
         print()
         print(
-            f"Could not find "
-            f"'{target_pokemon}' "
-            "on any currently available map."
+            f"'{target_pokemon}' isn't in "
+            "eclipse_maps.db."
+        )
+
+        print(
+            "This could mean the Pokémon genuinely "
+            "isn't on any known map, or that the "
+            "database hasn't been populated/updated "
+            "yet - run database_updater.py to (re)build "
+            "it."
         )
 
         input(
@@ -2144,53 +2125,53 @@ def target_pokemon_mode(driver):
         return
 
     # --------------------------------------------------------
-    # Display all maps where the target exists.
+    # Only hunt maps that are actually accessible right now.
+    # A locked exclusive area showing up in the database is
+    # real information (it tells you where to find the
+    # Pokémon once unlocked), but it can't be searched yet.
     # --------------------------------------------------------
 
-    matching_maps = list(
-        matches_by_map.keys()
-    )
+    matching_maps = []
 
-    print()
-    print(
-        "=" * 60
-    )
+    for result in db_results:
 
-    print(
-        f"FOUND {target_pokemon.upper()} "
-        f"ON {len(matching_maps)} MAP(S)"
-    )
+        map_name = result["map_name"]
 
-    print(
-        "=" * 60
-    )
+        if not result["unlocked"]:
+            continue
 
-    for index, map_name in enumerate(
-        matching_maps,
-        1
-    ):
-
-        matches = matches_by_map[
-            map_name
-        ]
-
-        names = ", ".join(
-            sorted(
-                {
-                    pokemon["name"]
-                    for pokemon in matches
-                }
+        if map_name not in matching_maps:
+            matching_maps.append(
+                map_name
             )
+
+    if not matching_maps:
+
+        print()
+        print(
+            "=" * 60
+        )
+
+        print(
+            "NO ACCESSIBLE MAPS"
+        )
+
+        print(
+            "=" * 60
         )
 
         print()
         print(
-            f"{index}. {map_name}"
+            f"'{target_pokemon}' was found in the "
+            "database, but only on maps that aren't "
+            "currently unlocked on this account."
         )
 
-        print(
-            f"   Available as: {names}"
+        input(
+            "\nPress Enter to return..."
         )
+
+        return
 
     # --------------------------------------------------------
     # Ask how many searches to perform PER

@@ -1,8 +1,12 @@
 import sqlite3
 import re
+import os
 
 
-DB_FILE = "eclipse_maps.db"
+DB_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "eclipse_maps.db"
+)
 
 
 # ============================================================
