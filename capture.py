@@ -1148,6 +1148,7 @@ def capture_attempt(driver):
 
 def capture_encounter(driver):
 
+
     print()
     print(
         "  Pokémon encounter!"
@@ -1199,55 +1200,52 @@ def capture_encounter(driver):
 
             return True
 
-        if not has_usable_ball(
+        # ----------------------------------------------------
+        # Capture failed.
+        #
+        # IMPORTANT:
+        # Do NOT use has_usable_ball() here to decide whether
+        # another attempt is possible.
+        #
+        # Eclipse provides a "Use Another (X left)" control
+        # when another capture attempt is available.
+        # ----------------------------------------------------
+
+        print(
+            "  ⚠ Capture attempt failed."
+        )
+
+        if attempt >= max_attempts:
+
+            print(
+                "  ✗ Maximum capture attempts reached."
+            )
+
+            break
+
+        print(
+            "  Looking for another capture attempt..."
+        )
+
+        if click_use_another(
             driver
         ):
 
             print(
-                "  ✗ Out of usable Poke Balls. "
-                "Stopping encounter."
+                "  ✓ Preparing another capture attempt..."
             )
 
-            _capture_stats["failed"] += 1
+            time.sleep(
+                0.5
+            )
 
-            return False
-
-        use_another = find_use_another(
-            driver
-        )
-
-        if use_another:
-
-            if click_use_another(
-                driver
-            ):
-
-                print(
-                    "  ✓ Preparing another "
-                    "capture attempt..."
-                )
-
-                time.sleep(
-                    random.uniform(
-                        0.5,
-                        1.0
-                    )
-                )
-
-                continue
+            continue
 
         print(
-            "  ✗ No further capture attempt "
-            "available."
+            "  ✗ No further capture attempt available."
         )
 
-        _capture_stats["failed"] += 1
-
-        return False
-
-    print(
-        "  ✗ Capture attempts exhausted."
-    )
+        break
 
     _capture_stats["failed"] += 1
 
