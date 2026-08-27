@@ -1,5 +1,7 @@
 import time
 import random
+import re
+from collections import defaultdict
 
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
@@ -17,28 +19,40 @@ from capture import capture_encounter
 # MINING TIMING
 # ============================================================
 
-# Short polling keeps mining responsive without adding
-# unnecessary delays between mines.
 MINE_POLL_WAIT = 0.15
 
-# Small delay after a successful click. Eclipse normally
-# processes the result quickly, but this gives the page a
-# chance to update before we inspect it.
 MINE_RESULT_MIN_WAIT = 0.35
 MINE_RESULT_MAX_WAIT = 0.75
 
-# Maximum time to wait for a temporarily disabled Mine button
-# to become usable.
 MINE_BUTTON_WAIT = min(
     max(float(WAIT_LONG), 3.0),
     10.0,
 )
 
-# Maximum time to wait for a result after clicking Mine.
 MINE_RESULT_WAIT = min(
     max(float(WAIT_LONG), 3.0),
     10.0,
 )
+
+
+# ============================================================
+# SESSION STATISTICS
+# ============================================================
+
+def create_mining_stats():
+    return {
+        "mines": 0,
+        "encounters": 0,
+        "captured": 0,
+        "capture_failed": 0,
+        "mining_xp": 0,
+        "pickaxe_xp": 0.0,
+        "resources": defaultdict(int),
+        "items": defaultdict(int),
+        "rocks": defaultdict(int),
+        "started": time.time(),
+        "area_completed": False,
+    }
 
 
 # ============================================================
@@ -49,21 +63,6 @@ def find_mine_button(
     driver,
     require_enabled=True,
 ):
-    """
-    Find the Eclipse Mine button.
-
-    require_enabled=True:
-        Only return a button that can currently be clicked.
-
-    require_enabled=False:
-        Return a visible Mine button even if Eclipse has
-        temporarily disabled it.
-
-    The latter is useful for distinguishing:
-        - Mine button exists but is temporarily disabled
-        - Mine button genuinely disappeared
-    """
-
     selectors = [
         (
             By.CSS_SELECTOR,
@@ -104,13 +103,10 @@ def find_mine_button(
                 try:
 
                     if not element.is_displayed():
-
                         continue
 
                     if require_enabled:
-
                         if not element.is_enabled():
-
                             continue
 
                     return element
@@ -123,19 +119,17 @@ def find_mine_button(
                     continue
 
         except Exception:
-
             continue
 
     return None
 
 
 # ============================================================
-# PAGE STATE HELPERS
+# PAGE STATE
 # ============================================================
 
-def _body_text(
-    driver,
-):
+def _body_text(driver):
+
     try:
 
         return driver.find_element(
@@ -148,22 +142,13 @@ def _body_text(
         return ""
 
 
-def area_cleared_detected(
-    driver,
-):
-    """
-    Detect mining-area completion.
-
-    Kept deliberately broad because Eclipse can change the
-    exact wording of the completion message.
-    """
+def area_cleared_detected(driver):
 
     text = _body_text(
         driver
     )
 
     if not text:
-
         return False
 
     return any(
@@ -178,47 +163,304 @@ def area_cleared_detected(
     )
 
 
-def encounter_detected(
-    driver,
-):
-    """
-    Quickly determine whether a Pokémon encounter appeared.
-    """
+def encounter_detected(driver):
 
     try:
 
-        if find_encounter_fight(
-            driver
-        ):
-
-            return True
+        return bool(
+            find_encounter_fight(
+                driver
+            )
+        )
 
     except Exception:
 
-        pass
+        return False
 
-    return False
+
+# ============================================================
+# MINING RESULT PARSING
+# ============================================================
+
+def get_mining_result(driver):
+
+    try:
+
+        result = driver.find_element(
+            By.ID,
+            "M_Result",
+        )
+
+        return result
+
+    except Exception:
+
+        return None
+
+
+def parse_mining_result(
+    driver,
+    stats,
+):
+    """
+    Read Eclipse's #M_Result and record:
+
+        - Resources
+        - Mining XP
+        - Pickaxe XP
+        - Items
+        - Rocks
+
+    Example Eclipse HTML:
+
+        <img alt="Sapphire">
+        <b>+2</b>
+        <div>Sapphire</div>
+
+        You gained <b>15</b> mining experience.
+
+        <b>+0.6</b> Pickaxe XP
+
+        You have obtained a(n)
+        <b>Great Ball</b> (x1).
+
+        You found 6
+        <a>Green</a> rocks.
+    """
+
+    result = get_mining_result(
+        driver
+    )
+
+    if result is None:
+        return False
+
+    try:
+
+        html = result.get_attribute(
+            "innerHTML"
+        )
+
+        text = result.text
+
+    except Exception:
+
+        return False
+
+    if not html:
+        return False
+
+    # --------------------------------------------------------
+    # RESOURCE
+    #
+    # Eclipse identifies the resource using the image alt:
+    #
+    # <img ... alt="Sapphire">
+    # <b>+2</b>
+    # --------------------------------------------------------
+
+    resource_images = re.findall(
+        r'<img[^>]+alt=["\']([^"\']+)["\'][^>]*>',
+        html,
+        flags=re.IGNORECASE,
+    )
+
+    for resource in resource_images:
+
+        resource = resource.strip()
+
+        if not resource:
+            continue
+
+        # Ignore unrelated images such as rocks.
+        if resource.lower() in {
+            "great ball",
+            "ultra ball",
+            "poke ball",
+            "pokeball",
+            "pickaxe",
+        }:
+            continue
+
+        # Look for the +amount near this resource image.
+        match = re.search(
+            r'<img[^>]+alt=["\']'
+            + re.escape(resource)
+            + r'["\'][^>]*>'
+            r'.{0,500}?'
+            r'<b[^>]*>\s*\+?([\d,.]+)\s*</b>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        if match:
+
+            try:
+
+                amount = int(
+                    float(
+                        match.group(1).replace(
+                            ",",
+                            "",
+                        )
+                    )
+                )
+
+                stats["resources"][
+                    resource
+                ] += amount
+
+            except ValueError:
+                pass
+
+    # --------------------------------------------------------
+    # MINING XP
+    # --------------------------------------------------------
+
+    match = re.search(
+        r"You gained\s+"
+        r"<b[^>]*>\s*([\d,.]+)\s*</b>"
+        r"\s*mining experience",
+        html,
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+
+        try:
+
+            stats["mining_xp"] += int(
+                float(
+                    match.group(1).replace(
+                        ",",
+                        "",
+                    )
+                )
+            )
+
+        except ValueError:
+            pass
+
+    # --------------------------------------------------------
+    # PICKAXE XP
+    # --------------------------------------------------------
+
+    match = re.search(
+        r"<b[^>]*>\s*\+?([\d,.]+)\s*</b>"
+        r"\s*Pickaxe XP",
+        html,
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+
+        try:
+
+            stats["pickaxe_xp"] += float(
+                match.group(1).replace(
+                    ",",
+                    "",
+                )
+            )
+
+        except ValueError:
+            pass
+
+    # --------------------------------------------------------
+    # ITEMS
+    #
+    # Example:
+    #
+    # You have obtained a(n)
+    # <b>Great Ball</b> (x1).
+    # --------------------------------------------------------
+
+    item_matches = re.findall(
+        r"You have obtained\s+"
+        r"a(?:n)?\s+"
+        r"<b[^>]*>(.*?)</b>"
+        r"\s*\(x\s*([\d,.]+)\)",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for item, amount in item_matches:
+
+        item = re.sub(
+            r"<[^>]+>",
+            "",
+            item,
+        ).strip()
+
+        try:
+
+            amount = int(
+                float(
+                    amount.replace(
+                        ",",
+                        "",
+                    )
+                )
+            )
+
+        except ValueError:
+
+            continue
+
+        if item:
+            stats["items"][item] += amount
+
+    # --------------------------------------------------------
+    # ROCKS
+    #
+    # Example:
+    #
+    # You found 6 <a>Green</a> rocks.
+    # --------------------------------------------------------
+
+    rock_matches = re.findall(
+        r"You found\s+"
+        r"([\d,.]+)\s+"
+        r"<a[^>]*>(.*?)</a>"
+        r"\s+rocks?",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for amount, rock in rock_matches:
+
+        rock = re.sub(
+            r"<[^>]+>",
+            "",
+            rock,
+        ).strip()
+
+        try:
+
+            amount = int(
+                float(
+                    amount.replace(
+                        ",",
+                        "",
+                    )
+                )
+            )
+
+        except ValueError:
+
+            continue
+
+        if rock:
+            stats["rocks"][rock] += amount
+
+    return True
 
 
 # ============================================================
 # MINE CLICK
 # ============================================================
 
-def click_mine(
-    driver,
-):
-    """
-    Wait for the Mine button to become enabled and click it.
-
-    IMPORTANT:
-    A visible-but-disabled Mine button is NOT treated as an
-    error. Eclipse temporarily disables the button while its
-    previous action is processing.
-
-    While waiting, we also check for:
-        - Pokémon encounters
-        - Area completion
-    """
+def click_mine(driver):
 
     end_time = (
         time.time()
@@ -229,33 +471,15 @@ def click_mine(
 
     while time.time() < end_time:
 
-        # ----------------------------------------------------
-        # Check for an encounter first.
-        #
-        # This prevents us from sitting around waiting for the
-        # Mine button when Eclipse has actually moved into an
-        # encounter state.
-        # ----------------------------------------------------
-
         if encounter_detected(
             driver
         ):
-
             return False
-
-        # ----------------------------------------------------
-        # Check for area completion.
-        # ----------------------------------------------------
 
         if area_cleared_detected(
             driver
         ):
-
             return False
-
-        # ----------------------------------------------------
-        # Look for an enabled Mine button.
-        # ----------------------------------------------------
 
         element = find_mine_button(
             driver,
@@ -266,8 +490,6 @@ def click_mine(
 
             try:
 
-                # Tiny randomized delay helps avoid hammering
-                # the same JavaScript button repeatedly.
                 time.sleep(
                     random.uniform(
                         0.15,
@@ -295,26 +517,19 @@ def click_mine(
 
         else:
 
-            # ------------------------------------------------
-            # The button may exist but still be disabled.
-            # That's normal during Eclipse processing.
-            # ------------------------------------------------
-
             disabled_element = find_mine_button(
                 driver,
                 require_enabled=False,
             )
 
-            if disabled_element:
+            if disabled_element and not disabled_seen:
 
-                if not disabled_seen:
+                print(
+                    "  ⏳ Mine temporarily disabled; "
+                    "waiting..."
+                )
 
-                    print(
-                        "  ⏳ Mine temporarily disabled; "
-                        "waiting..."
-                    )
-
-                    disabled_seen = True
+                disabled_seen = True
 
         time.sleep(
             MINE_POLL_WAIT
@@ -327,20 +542,8 @@ def click_mine(
 # WAIT FOR MINING RESULT
 # ============================================================
 
-def wait_for_mining_result(
-    driver,
-):
-    """
-    Wait for Eclipse to finish processing a Mine click.
+def wait_for_mining_result(driver):
 
-    Returns:
-        True  - normal mining result detected
-        False - encounter or area completion detected
-    """
-
-    # Give Eclipse a small amount of time to start updating
-    # the page. This is much faster than the old 1.2-2.0 sec
-    # fixed delay.
     time.sleep(
         random.uniform(
             MINE_RESULT_MIN_WAIT,
@@ -358,17 +561,21 @@ def wait_for_mining_result(
         if encounter_detected(
             driver
         ):
-
             return False
 
         if area_cleared_detected(
             driver
         ):
-
             return False
 
-        # If Mine is enabled again, Eclipse has normally
-        # finished processing the previous result.
+        result = get_mining_result(
+            driver
+        )
+
+        if result:
+
+            return True
+
         if find_mine_button(
             driver,
             require_enabled=True,
@@ -380,8 +587,6 @@ def wait_for_mining_result(
             MINE_POLL_WAIT
         )
 
-    # Don't automatically consider a timeout fatal.
-    # The caller will check encounter/completion state.
     return True
 
 
@@ -389,24 +594,18 @@ def wait_for_mining_result(
 # AREA COMPLETION
 # ============================================================
 
-def handle_area_cleared(
-    driver,
-):
-    """
-    Handle the mining-area completion screen.
-    """
+def handle_area_cleared(driver):
 
     if not area_cleared_detected(
         driver
     ):
-
         return False
 
     print(
         "⚠ Mining area completion detected."
     )
 
-    completion_selectors = [
+    selectors = [
         (
             By.XPATH,
             "//button[normalize-space()='OK']",
@@ -425,7 +624,7 @@ def handle_area_cleared(
         ),
     ]
 
-    for by, selector in completion_selectors:
+    for by, selector in selectors:
 
         try:
 
@@ -472,16 +671,7 @@ def handle_area_cleared(
 # MINING CONTINUE
 # ============================================================
 
-def click_mining_continue(
-    driver,
-):
-    """
-    Click Continue after a mining Pokémon capture.
-
-    Eclipse may use document.location='mines#mine', which can
-    leave the browser URL effectively unchanged. Therefore we
-    do NOT require a URL change to consider this successful.
-    """
+def click_mining_continue(driver):
 
     selectors = [
         (
@@ -521,7 +711,6 @@ def click_mining_continue(
                             not element.is_displayed()
                             or not element.is_enabled()
                         ):
-
                             continue
 
                         if safe_click(
@@ -533,11 +722,6 @@ def click_mining_continue(
                                 "  ✓ Continue clicked."
                             )
 
-                            # Eclipse disables Continue and
-                            # navigates to mines#mine through
-                            # JavaScript. Wait briefly for the
-                            # mining interface to return instead
-                            # of requiring a URL change.
                             ready_end = (
                                 time.time()
                                 + min(
@@ -549,10 +733,7 @@ def click_mining_continue(
                                 )
                             )
 
-                            while (
-                                time.time()
-                                < ready_end
-                            ):
+                            while time.time() < ready_end:
 
                                 if (
                                     find_mine_button(
@@ -577,10 +758,6 @@ def click_mining_continue(
                                     MINE_POLL_WAIT
                                 )
 
-                            # The click itself succeeded.
-                            # Do not produce a scary warning just
-                            # because Eclipse did not expose a
-                            # detectable state immediately.
                             print(
                                 "  ✓ Continue accepted."
                             )
@@ -612,10 +789,8 @@ def click_mining_continue(
 def handle_mining_encounter(
     driver,
     catch_pokemon,
+    stats,
 ):
-    """
-    Handle a Pokémon encountered while mining.
-    """
 
     if not find_encounter_fight(
         driver
@@ -623,12 +798,14 @@ def handle_mining_encounter(
 
         return False
 
+    stats["encounters"] += 1
+
     print(
         "\n  Pokémon encounter while mining!"
     )
 
     # --------------------------------------------------------
-    # Mine-only mode.
+    # Mine-only mode
     # --------------------------------------------------------
 
     if not catch_pokemon:
@@ -665,7 +842,7 @@ def handle_mining_encounter(
             return False
 
     # --------------------------------------------------------
-    # Enter encounter.
+    # Enter encounter
     # --------------------------------------------------------
 
     if not click_encounter_fight(
@@ -674,113 +851,552 @@ def handle_mining_encounter(
 
         return False
 
-    # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # capture_encounter() contains the latest capture fixes,
-    # including the Use Another logic.
-    # --------------------------------------------------------
-
-    if not capture_encounter(
+    # capture.py contains the current Use Another fixes.
+    if capture_encounter(
         driver
     ):
 
-        print(
-            "  ✗ Mining encounter capture failed."
-        )
+        stats["captured"] += 1
 
         print(
-            "  → Returning to mining area..."
+            "  ✓ Mining Pokémon captured."
         )
 
-        try:
+        if not click_mining_continue(
+            driver
+        ):
 
-            driver.get(
-                MINES_URL
-            )
+            try:
 
-            wait_for_document_ready(
-                driver
-            )
-
-            time.sleep(
-                random.uniform(
-                    0.6,
-                    1.0,
+                driver.get(
+                    MINES_URL
                 )
+
+                wait_for_document_ready(
+                    driver
+                )
+
+                time.sleep(
+                    random.uniform(
+                        0.6,
+                        1.0,
+                    )
+                )
+
+            except Exception:
+
+                return False
+
+        return True
+
+    stats["capture_failed"] += 1
+
+    print(
+        "  ✗ Mining encounter capture failed."
+    )
+
+    print(
+        "  → Returning to mining area..."
+    )
+
+    try:
+
+        driver.get(
+            MINES_URL
+        )
+
+        wait_for_document_ready(
+            driver
+        )
+
+        time.sleep(
+            random.uniform(
+                0.6,
+                1.0,
             )
+        )
 
-        except Exception:
+        print(
+            "  ✓ Returned to mining."
+        )
 
-            pass
+        return True
+
+    except Exception:
 
         return False
 
-    print(
-        "  ✓ Mining Pokémon captured."
-    )
 
-    # --------------------------------------------------------
-    # Return from capture result.
-    #
-    # Do not require the URL to change because Eclipse uses
-    # mines#mine JavaScript navigation.
-    # --------------------------------------------------------
+# ============================================================
+# INPUT HELPERS
+# ============================================================
 
-    if not click_mining_continue(
-        driver
-    ):
+def get_positive_integer(prompt):
 
-        # As a fallback, reload the mining page.
+    while True:
+
         try:
 
-            driver.get(
-                MINES_URL
+            value = int(
+                input(prompt).strip()
             )
 
-            wait_for_document_ready(
-                driver
+            if value > 0:
+                return value
+
+        except ValueError:
+            pass
+
+        print(
+            "  ✗ Please enter a positive whole number."
+        )
+
+
+def parse_duration(value):
+
+    """
+    Supports:
+
+        30
+        30s
+        5m
+        2h
+        1h 30m
+        90m
+        2h 15m 30s
+
+    A number without a suffix is treated as minutes.
+    """
+
+    value = value.strip().lower()
+
+    if not value:
+        return None
+
+    total_seconds = 0.0
+
+    matches = re.findall(
+        r"(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes|s|sec|secs|second|seconds)?",
+        value,
+    )
+
+    if not matches:
+        return None
+
+    consumed = "".join(
+        number + (unit or "")
+        for number, unit in matches
+    )
+
+    normalized = re.sub(
+        r"\s+",
+        "",
+        value,
+    )
+
+    # Remove separators that don't affect parsing.
+    normalized = normalized.replace(
+        ",",
+        "",
+    )
+
+    # Simple plain number = minutes.
+    if re.fullmatch(
+        r"\d+(?:\.\d+)?",
+        normalized,
+    ):
+
+        return float(normalized) * 60
+
+    for number, unit in matches:
+
+        amount = float(number)
+
+        if not unit:
+            # Unsuffixed values inside a compound duration
+            # are interpreted as minutes.
+            total_seconds += (
+                amount * 60
             )
 
-            time.sleep(
-                random.uniform(
-                    0.6,
-                    1.0,
-                )
+        elif unit in {
+            "h",
+            "hr",
+            "hrs",
+            "hour",
+            "hours",
+        }:
+
+            total_seconds += (
+                amount * 3600
             )
 
-        except Exception:
+        elif unit in {
+            "m",
+            "min",
+            "mins",
+            "minute",
+            "minutes",
+        }:
 
-            return False
+            total_seconds += (
+                amount * 60
+            )
 
-    return True
+        else:
+
+            total_seconds += amount
+
+    return total_seconds if total_seconds > 0 else None
+
+
+def format_duration(seconds):
+
+    seconds = max(
+        0,
+        int(seconds),
+    )
+
+    hours = seconds // 3600
+
+    minutes = (
+        seconds % 3600
+    ) // 60
+
+    secs = seconds % 60
+
+    if hours:
+        return (
+            f"{hours}h "
+            f"{minutes:02d}m "
+            f"{secs:02d}s"
+        )
+
+    return (
+        f"{minutes}m "
+        f"{secs:02d}s"
+    )
+
+
+# ============================================================
+# MINING RESULTS
+# ============================================================
+
+def print_mining_results(
+    stats,
+    mode_description,
+):
+
+    elapsed = (
+        time.time()
+        - stats["started"]
+    )
+
+    print()
+    print(
+        "=" * 60
+    )
+    print(
+        "MINING COMPLETE"
+    )
+    print(
+        "=" * 60
+    )
+    print()
+
+    print(
+        f"Mining mode       : {mode_description}"
+    )
+
+    print(
+        f"Mines completed   : {stats['mines']}"
+    )
+
+    print(
+        f"Time elapsed      : {format_duration(elapsed)}"
+    )
+
+    print(
+        f"Area completed    : "
+        f"{'Yes' if stats['area_completed'] else 'No'}"
+    )
+
+    print()
+
+    # --------------------------------------------------------
+    # Resources
+    # --------------------------------------------------------
+
+    print(
+        "RESOURCES GATHERED"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    if stats["resources"]:
+
+        for name, amount in sorted(
+            stats["resources"].items()
+        ):
+
+            print(
+                f"{name:<25}: {amount:,}"
+            )
+
+    else:
+
+        print(
+            "None"
+        )
+
+    print()
+
+    # --------------------------------------------------------
+    # Items
+    # --------------------------------------------------------
+
+    print(
+        "ITEMS OBTAINED"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    if stats["items"]:
+
+        for name, amount in sorted(
+            stats["items"].items()
+        ):
+
+            print(
+                f"{name:<25}: {amount:,}"
+            )
+
+    else:
+
+        print(
+            "None"
+        )
+
+    print()
+
+    # --------------------------------------------------------
+    # Rocks
+    # --------------------------------------------------------
+
+    print(
+        "ROCKS FOUND"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    if stats["rocks"]:
+
+        for name, amount in sorted(
+            stats["rocks"].items()
+        ):
+
+            print(
+                f"{name + ' rocks':<25}: {amount:,}"
+            )
+
+    else:
+
+        print(
+            "None"
+        )
+
+    print()
+
+    # --------------------------------------------------------
+    # XP
+    # --------------------------------------------------------
+
+    print(
+        "EXPERIENCE"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    print(
+        f"{'Mining XP':<25}: "
+        f"{stats['mining_xp']:,}"
+    )
+
+    print(
+        f"{'Pickaxe XP':<25}: "
+        f"{stats['pickaxe_xp']:,.2f}"
+    )
+
+    print()
+
+    # --------------------------------------------------------
+    # Pokémon
+    # --------------------------------------------------------
+
+    print(
+        "POKÉMON"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    print(
+        f"{'Encounters':<25}: "
+        f"{stats['encounters']:,}"
+    )
+
+    print(
+        f"{'Captured':<25}: "
+        f"{stats['captured']:,}"
+    )
+
+    print(
+        f"{'Capture failures':<25}: "
+        f"{stats['capture_failed']:,}"
+    )
+
+    print()
+
+    print(
+        "=" * 60
+    )
 
 
 # ============================================================
 # MINER MODE
 # ============================================================
 
-def miner_mode(
-    driver,
-):
+def miner_mode(driver):
+
+    print()
     print(
-        "\n"
-        + "=" * 60
-        + "\nA-MINER\n"
-        + "=" * 60
+        "=" * 60
+    )
+    print(
+        "A-MINER"
+    )
+    print(
+        "=" * 60
     )
 
-    choice = input(
-        "\n"
-        "1. Mine and catch Pokémon\n"
-        "2. Mine only\n"
-        "\n"
+    print()
+    print(
+        "1. Mine and catch Pokémon"
+    )
+    print(
+        "2. Mine only"
+    )
+    print(
+        "3. Mine a specific amount"
+    )
+    print(
+        "4. Mine for a specific amount of time"
+    )
+    print(
+        "5. Mine until area is completed"
+    )
+    print(
+        "6. Back"
+    )
+
+    print()
+
+    mode = input(
         "Choose: "
     ).strip()
 
+    if mode == "6":
+        return
+
+    if mode not in {
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+    }:
+
+        print(
+            "✗ Invalid choice."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Pokémon option
+    #
+    # Modes 1, 3, 4 and 5 catch Pokémon.
+    # Mode 2 is mine-only.
+    # --------------------------------------------------------
+
     catch_pokemon = (
-        choice != "2"
+        mode != "2"
     )
+
+    target_mines = None
+    target_seconds = None
+
+    if mode == "3":
+
+        target_mines = get_positive_integer(
+            "\nHow many mines? "
+        )
+
+        mode_description = (
+            f"{target_mines:,} mines"
+        )
+
+    elif mode == "4":
+
+        while True:
+
+            duration_text = input(
+                "\nHow long would you like to mine? "
+                "(examples: 30s, 5m, 2h, 1h 30m): "
+            )
+
+            target_seconds = parse_duration(
+                duration_text
+            )
+
+            if target_seconds:
+
+                break
+
+            print(
+                "  ✗ Invalid duration."
+            )
+
+        mode_description = (
+            f"{duration_text.strip()}"
+        )
+
+    elif mode == "5":
+
+        mode_description = (
+            "Until area completed"
+        )
+
+    elif mode == "2":
+
+        mode_description = (
+            "Continuous mining"
+        )
+
+    else:
+
+        mode_description = (
+            "Continuous mining + Pokémon"
+        )
 
     # --------------------------------------------------------
     # Open mining page.
@@ -811,18 +1427,91 @@ def miner_mode(
 
         return
 
-    mine_count = 0
+    stats = create_mining_stats()
+
+    print()
+    print(
+        "=" * 60
+    )
+    print(
+        "MINING STARTED"
+    )
+    print(
+        "=" * 60
+    )
+
+    print(
+        f"Mode              : {mode_description}"
+    )
+
+    print(
+        f"Pokémon catching  : "
+        f"{'Yes' if catch_pokemon else 'No'}"
+    )
+
+    if target_mines:
+
+        print(
+            f"Target mines      : "
+            f"{target_mines:,}"
+        )
+
+    if target_seconds:
+
+        print(
+            f"Duration          : "
+            f"{format_duration(target_seconds)}"
+        )
+
+    print()
+
+    # --------------------------------------------------------
+    # Main mining loop.
+    # --------------------------------------------------------
 
     while True:
 
-        mine_count += 1
+        # ----------------------------------------------------
+        # Time limit.
+        # ----------------------------------------------------
 
-        print(
-            f"\n=== Mine #{mine_count} ==="
-        )
+        if target_seconds is not None:
+
+            elapsed = (
+                time.time()
+                - stats["started"]
+            )
+
+            if elapsed >= target_seconds:
+
+                print()
+                print(
+                    "✓ Mining time limit reached."
+                )
+
+                break
 
         # ----------------------------------------------------
-        # Check whether we're already in an encounter.
+        # Mine count limit.
+        #
+        # This counts actual successful Mine clicks, NOT loop
+        # iterations.
+        # ----------------------------------------------------
+
+        if (
+            target_mines is not None
+            and stats["mines"] >= target_mines
+        ):
+
+            print()
+            print(
+                "✓ Mining target reached."
+            )
+
+            break
+
+        # ----------------------------------------------------
+        # Existing encounter.
         # ----------------------------------------------------
 
         if encounter_detected(
@@ -832,23 +1521,26 @@ def miner_mode(
             if not handle_mining_encounter(
                 driver,
                 catch_pokemon,
+                stats,
             ):
 
                 print(
                     "✗ Mining encounter handling failed."
                 )
 
-                return
+                break
 
             continue
 
         # ----------------------------------------------------
-        # Check for area completion.
+        # Area completion.
         # ----------------------------------------------------
 
         if handle_area_cleared(
             driver
         ):
+
+            stats["area_completed"] = True
 
             print(
                 "✓ Mining area completed."
@@ -858,26 +1550,101 @@ def miner_mode(
 
         # ----------------------------------------------------
         # Click Mine.
-        #
-        # click_mine() now waits for a grayed-out button instead
-        # of treating it as an immediate failure.
         # ----------------------------------------------------
 
-        if click_mine(
+        mine_clicked = click_mine(
             driver
-        ):
+        )
 
-            # ------------------------------------------------
-            # Wait for Eclipse to process the mining action.
-            # ------------------------------------------------
+        # ----------------------------------------------------
+        # If Mine wasn't clicked, determine why.
+        # ----------------------------------------------------
 
-            wait_for_mining_result(
+        if not mine_clicked:
+
+            if encounter_detected(
                 driver
+            ):
+
+                if not handle_mining_encounter(
+                    driver,
+                    catch_pokemon,
+                    stats,
+                ):
+
+                    print(
+                        "✗ Mining encounter handling failed."
+                    )
+
+                    break
+
+                continue
+
+            if handle_area_cleared(
+                driver
+            ):
+
+                stats["area_completed"] = True
+
+                print(
+                    "✓ Mining area completed."
+                )
+
+                break
+
+            # Give a temporarily disabled button another
+            # opportunity rather than treating it as fatal.
+            disabled_button = find_mine_button(
+                driver,
+                require_enabled=False,
+            )
+
+            if disabled_button:
+
+                time.sleep(
+                    MINE_POLL_WAIT
+                )
+
+                continue
+
+            time.sleep(
+                MINE_POLL_WAIT
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # A real Mine action occurred.
+        # ----------------------------------------------------
+
+        stats["mines"] += 1
+
+        if target_mines:
+
+            print(
+                f"  Mine progress: "
+                f"{stats['mines']}/{target_mines}"
             )
 
         # ----------------------------------------------------
-        # An encounter may have appeared while the Mine button
-        # was disabled/processing.
+        # Wait for Eclipse's result.
+        # ----------------------------------------------------
+
+        wait_for_mining_result(
+            driver
+        )
+
+        # ----------------------------------------------------
+        # Parse #M_Result.
+        # ----------------------------------------------------
+
+        parse_mining_result(
+            driver,
+            stats,
+        )
+
+        # ----------------------------------------------------
+        # Encounter after mining result.
         # ----------------------------------------------------
 
         if encounter_detected(
@@ -887,23 +1654,26 @@ def miner_mode(
             if not handle_mining_encounter(
                 driver,
                 catch_pokemon,
+                stats,
             ):
 
                 print(
                     "✗ Mining encounter handling failed."
                 )
 
-                return
+                break
 
             continue
 
         # ----------------------------------------------------
-        # Check for area completion.
+        # Area completion after mining result.
         # ----------------------------------------------------
 
         if handle_area_cleared(
             driver
         ):
+
+            stats["area_completed"] = True
 
             print(
                 "✓ Mining area completed."
@@ -911,119 +1681,12 @@ def miner_mode(
 
             break
 
-        # ----------------------------------------------------
-        # If Mine is still disabled, give Eclipse another short
-        # opportunity to finish processing rather than looping
-        # rapidly and printing false errors.
-        # ----------------------------------------------------
-
-        mine_button = find_mine_button(
-            driver,
-            require_enabled=True,
+        print(
+            "  ✓ Mining result processed."
         )
 
-        if mine_button is None:
-
-            disabled_button = find_mine_button(
-                driver,
-                require_enabled=False,
-            )
-
-            if disabled_button:
-
-                print(
-                    "  ⏳ Mining action still processing..."
-                )
-
-                processing_end = (
-                    time.time()
-                    + min(
-                        max(
-                            float(WAIT_LONG),
-                            2.0,
-                        ),
-                        6.0,
-                    )
-                )
-
-                while (
-                    time.time()
-                    < processing_end
-                ):
-
-                    if encounter_detected(
-                        driver
-                    ):
-
-                        break
-
-                    if handle_area_cleared(
-                        driver
-                    ):
-
-                        break
-
-                    if find_mine_button(
-                        driver,
-                        require_enabled=True,
-                    ):
-
-                        break
-
-                    time.sleep(
-                        MINE_POLL_WAIT
-                    )
-
-                # Re-check the important states after waiting.
-                if encounter_detected(
-                    driver
-                ):
-
-                    if not handle_mining_encounter(
-                        driver,
-                        catch_pokemon,
-                    ):
-
-                        print(
-                            "✗ Mining encounter handling failed."
-                        )
-
-                        return
-
-                    continue
-
-                if handle_area_cleared(
-                    driver
-                ):
-
-                    print(
-                        "✓ Mining area completed."
-                    )
-
-                    break
-
-                if find_mine_button(
-                    driver,
-                    require_enabled=True,
-                ):
-
-                    print(
-                        "  ✓ Mining result processed."
-                    )
-
-                    continue
-
-        else:
-
-            print(
-                "  ✓ Mining result processed."
-            )
-
         # ----------------------------------------------------
-        # Very short pause before the next iteration.
-        #
-        # This is intentionally much shorter than the old
-        # .8-1.4 second fixed delay.
+        # Short pause before next mine.
         # ----------------------------------------------------
 
         time.sleep(
@@ -1032,3 +1695,12 @@ def miner_mode(
                 0.35,
             )
         )
+
+    # --------------------------------------------------------
+    # Final session report.
+    # --------------------------------------------------------
+
+    print_mining_results(
+        stats,
+        mode_description,
+    )
