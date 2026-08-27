@@ -383,21 +383,24 @@ def get_exclusive_maps(driver):
 
 def get_wild_pokemon(driver):
     """
-    Read the complete wild-Pokémon listing from the currently
-    loaded map.
+    Read every wild-Pokemon entry from the currently loaded map.
 
-    Eclipse can expose the listing slightly after the map itself
-    finishes navigation, so this function waits for the listing
-    rather than assuming it is immediately available.
+    Eclipse may expose the wild Pokemon through the Selenium DOM,
+    page_source, or both.
 
-    Both the visible display name and Eclipse's internal
-    pokemon= parameter are preserved.
+    We preserve:
+        - display name
+        - internal pokemon parameter
+        - dexed status
+
+    Diagnostic output is intentionally included so we can see
+    exactly what Eclipse gave us when a map contains Pokemon.
     """
 
     results = []
 
     # ============================================================
-    # WAIT FOR WILD POKEMON LISTING
+    # WAIT FOR WILD-POKEMON LISTING
     # ============================================================
 
     start = time.time()
@@ -405,35 +408,30 @@ def get_wild_pokemon(driver):
     while time.time() - start < WAIT_LONG:
 
         try:
-
             elements = driver.find_elements(
                 By.CSS_SELECTOR,
                 "div.wild-pokes a.map-wild-poke"
             )
 
             if elements:
-
                 break
 
         except Exception:
-
             pass
 
-        # Also allow the page source to satisfy the wait.
         try:
-
             source = driver.page_source
 
             if (
                 source
-                and "map-wild-poke" in source
-                and "wild-pokes" in source
+                and (
+                    "map-wild-poke" in source
+                    or "wild-pokes" in source
+                )
             ):
-
                 break
 
         except Exception:
-
             pass
 
         time.sleep(0.25)
@@ -457,44 +455,17 @@ def get_wild_pokemon(driver):
 
         try:
 
-            images = link.find_elements(
-                By.CSS_SELECTOR,
-                "img[alt]"
-            )
-
-            if not images:
-                continue
-
-            name = ""
-
-            for image in images:
-
-                try:
-
-                    alt = (
-                        image.get_attribute("alt")
-                        or ""
-                    ).strip()
-
-                except Exception:
-
-                    alt = ""
-
-                if alt:
-
-                    name = alt
-                    break
-
-            if not name:
-                continue
-
             href = (
                 link.get_attribute("href")
                 or ""
             ).strip()
 
+            # ----------------------------------------------------
+            # Extract internal pokemon parameter.
+            # ----------------------------------------------------
+
             match = re.search(
-                r"[?&]pokemon=([^&#]+)",
+                r"[?&]pokemon=([^&#\"']+)",
                 href,
                 re.IGNORECASE
             )
@@ -507,6 +478,32 @@ def get_wild_pokemon(driver):
                     match.group(1)
                     .strip()
                 )
+
+            # ----------------------------------------------------
+            # Find image alt text.
+            # ----------------------------------------------------
+
+            images = link.find_elements(
+                By.CSS_SELECTOR,
+                "img[alt]"
+            )
+
+            name = ""
+
+            for image in images:
+
+                alt = (
+                    image.get_attribute("alt")
+                    or ""
+                ).strip()
+
+                if alt:
+
+                    name = alt
+                    break
+
+            if not name:
+                continue
 
             class_attr = (
                 link.get_attribute("class")
@@ -537,10 +534,12 @@ def get_wild_pokemon(driver):
     # ============================================================
     # METHOD 2 — PAGE SOURCE
     #
-    # Always inspect page_source as well.
+    # IMPORTANT:
     #
-    # This supplements Selenium rather than acting as an
-    # all-or-nothing fallback.
+    # Do this EVEN if Selenium found results.
+    #
+    # Some entries can exist in page_source but not be returned
+    # correctly by Selenium.
     # ============================================================
 
     try:
@@ -553,9 +552,19 @@ def get_wild_pokemon(driver):
 
     if source:
 
+        # --------------------------------------------------------
+        # Match ANY anchor containing map-wild-poke.
+        #
+        # We don't assume:
+        #
+        #   class comes first
+        #   href comes first
+        #   attributes use double quotes
+        # --------------------------------------------------------
+
         anchor_pattern = re.compile(
-            r"<a\b[^>]*"
-            r'class=["\'][^"\']*\bmap-wild-poke\b[^"\']*["\']'
+            r"<a\b"
+            r"(?=[^>]*\bclass\s*=\s*[\"'][^\"']*\bmap-wild-poke\b[^\"']*[\"'])"
             r"[^>]*>"
             r".*?"
             r"</a>",
@@ -563,18 +572,25 @@ def get_wild_pokemon(driver):
             | re.DOTALL
         )
 
-        for block_match in anchor_pattern.finditer(
-            source
-        ):
+        source_blocks = list(
+            anchor_pattern.finditer(source)
+        )
+
+        print(
+            f"    [DEBUG] page_source wild entries: "
+            f"{len(source_blocks)}"
+        )
+
+        for block_match in source_blocks:
 
             block = block_match.group(0)
 
             # ----------------------------------------------------
-            # Internal Pokémon identifier
+            # Internal pokemon parameter
             # ----------------------------------------------------
 
             pokemon_match = re.search(
-                r'[?&]pokemon=([^"&\'#]+)',
+                r"[?&]pokemon=([^&#\"']+)",
                 block,
                 re.IGNORECASE
             )
@@ -589,17 +605,18 @@ def get_wild_pokemon(driver):
                 )
 
             # ----------------------------------------------------
-            # Display name
+            # Get ALL image alt values.
+            #
+            # Example:
+            #
+            # alt="Sapphire Galaxy Feebas"
             # ----------------------------------------------------
 
             alt_matches = re.findall(
-                r"<img\b[^>]*\balt=[\"']([^\"']+)[\"']",
+                r"<img\b[^>]*\balt\s*=\s*[\"']([^\"']+)[\"']",
                 block,
                 re.IGNORECASE
             )
-
-            if not alt_matches:
-                continue
 
             name = ""
 
@@ -616,14 +633,15 @@ def get_wild_pokemon(driver):
                     break
 
             if not name:
+
                 continue
 
             # ----------------------------------------------------
-            # Pokédex registration
+            # Dexed
             # ----------------------------------------------------
 
             class_match = re.search(
-                r'class=["\']([^"\']*\bmap-wild-poke\b[^"\']*)["\']',
+                r"class\s*=\s*[\"']([^\"']*\bmap-wild-poke\b[^\"']*)[\"']",
                 block,
                 re.IGNORECASE
             )
@@ -647,9 +665,6 @@ def get_wild_pokemon(driver):
 
     # ============================================================
     # REMOVE DUPLICATES
-    #
-    # Keep different internal identifiers even when display names
-    # happen to be identical.
     # ============================================================
 
     unique = []
@@ -680,6 +695,7 @@ def get_wild_pokemon(driver):
         )
 
         if key in seen:
+
             continue
 
         seen.add(key)
@@ -697,8 +713,64 @@ def get_wild_pokemon(driver):
             }
         )
 
-    return unique
+    # ============================================================
+    # DEBUG SUMMARY
+    # ============================================================
 
+    if unique:
+
+        print(
+            f"    [DEBUG] Detected "
+            f"{len(unique)} wild Pokemon entries."
+        )
+
+        # Only print entries containing useful target-like
+        # information. This prevents dumping hundreds of names.
+        for pokemon in unique:
+
+            name = pokemon["name"]
+            species = pokemon["species_param"]
+
+            if (
+                "feebas" in normalize(name)
+                or "feebas" in normalize(species)
+            ):
+
+                print(
+                    "    [DEBUG] FEebas-related entry:"
+                )
+
+                print(
+                    f"      Display: {name}"
+                )
+
+                print(
+                    f"      Parameter: {species}"
+                )
+
+    else:
+
+        print(
+            "    [DEBUG] WARNING: "
+            "No wild Pokemon entries detected."
+        )
+
+        # Show whether the expected container exists at all.
+        if source:
+
+            print(
+                "    [DEBUG] page_source contains "
+                f"'wild-pokes': "
+                f"{'wild-pokes' in source}"
+            )
+
+            print(
+                "    [DEBUG] page_source contains "
+                f"'map-wild-poke': "
+                f"{'map-wild-poke' in source}"
+            )
+
+    return unique
 
 def search_pokemon_across_maps(
     driver,
