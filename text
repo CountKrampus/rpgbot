@@ -1,0 +1,129 @@
+<div class="middle_navigation">
+<ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <li class="navtitle">
+    <img src="/images/xy-icons-shiny/245.png" class="icon">
+    <div>Subevent</div>
+  </li>
+  <li><a href="/subevents"><font color="blue">*</font> Monthly Elite Seillib Raffle</a></li>
+  <br>
+
+<li class="navtitle">
+  <img src="/images/icons/LegacyGalaxyBetaTrifox.png?15089" class="icon" style="margin-top:-10px">
+  <div>Recently Updated</div>
+</li>
+<li><a href="/legendary_areas?area_id=19"><font color="red">*</font> Thunder Ruins</a></li><li><a href="/legendary_areas?area_id=16"><font color="red">*</font> Fullmoon Island</a></li><li><a href="/star_shop?tab=raffles"><font color="blue">*</font> Star Shop Raffles</a></li><li><a href="/legendary_areas?area_id=18">Tree of Life</a></li><li><a href="/legendary_areas?area_id=15">Judgment Peak</a></li><li><a href="/legendary_areas?area_id=25">Moon Gaze Mountain</a></li><!--<li><a href="/events/rainbow_celestial_chase"><font color="blue">*</font> Rainbow Celestial Chase</a></li>-->
+
+
+<!-- <li><a href="/legendary_areas?area_id=41"><font color="red">*</font> Fox House</a></li> -->
+<!-- <li><a href="/events/shrouded_domain"><font color="red">*</font> Shrouded Domain</a></li> -->
+<!-- <li><a href="/legendary_areas?area_id=18">Dunsparce Forest</a></li> -->
+<!-- <li><a href="/events/shadow_palace"><font color="red">*</font> Shadow Palace</a></li> -->
+<br>
+
+
+
+
+
+
+
+
+<li class="navtitle">
+  <img src="/images/xy-icons/333.png" class="icon">
+  <div>General</div>
+</li>
+<li><a href="/">Home</a></li>
+<li><a href="/private_messages?area=inbox">Messages</a></li>
+<li><a href="/trading_center?area=all_trades">Trades</a></li>
+<li><a target="_blank" href="/forums/view_forum?forum_id=36">Guides</a></li>
+<li><a target="_blank" href="/forums/view_topic?topic_id=35227">New User Guide</a></li>
+<li><a href="/friends_list?area=friends">Friends</a></li>
+<li><a href="/staff_list">Staff List</a></li>
+<li><a href="/staff_list?event_team=1"><font color="blue">*</font> Event Team List</a></li>
+<li><a href="/rules">Rules</a></li>
+<li><a target="_blank" href="/big_cbox">Chat</a></li>
+<li><a target="_blank" href="/forums/">Forums</a></li>
+<li><a target="_blank" href="/forums/view_topic?topic_id=37144">Eclipse Star</a></li>
+<!-- <li><a target='_blank' href='/forums/view_topic?topic_id=34911'>Artist Applications</a></li> -->
+<li><a target="_blank" href="/forums/view_topic?topic_id=37014"><font color="blue">*</font> Art Submissions</a></li>
+<li><a target="_blank" href="/forums/view_topic?topic_id=30399">Donations</a></li>
+<li><a href="/logout">Logout</a></li>
+<br>
+
+
+
+<li class="navtitle">
+  <img src="/images/xy-icons/121.png" class="icon">
+  <div>Miscellaneous</div>
+</li>
+<li><a href="/find_a_trainer">Find Trainer</a></li>
+<li><a href="/options">Options</a></li>
+<li><a href="/referral_center">Referral Center</a></li>
+<li><a href="/music_player">Music Player</a></li>
+<li><a href="/send_money">Send Money</a></li>
+<li><a href="/bbcode_playground">BBCode Playground</a></li><li><a href="/art_credits">Art Credits</a></li><li><a href="/pickaxes">Pickaxe Refinery</a></li>
+<br>
+
+<li class="navtitle">
+  <img src="/images/xy-icons/114.png" class="icon">
+  <div>Explore</div>
+</li>
+<li><a href="/battle_area">Battle Area</a></li>
+<li><a href="/legendary_areas">Legendary Areas</a></li>
+<li><a href="/mines">Mines</a></li>
+<li><a href="/pokemon_center">Pokemon Center</a></li>
+<li><a href="/minigame_center">Minigame Center</a></li>
+<li><a href="/dna_center">DNA Center</a></li>
+<li><a href="/rock_tradein">Rock Trade-In</a></li>
+<li><a href="/lottery">Lottery</a></li>
+  <li><a href="/subevents">Current Subevent</a></li>
+<li><a href="/events/golden_celestial_chase">Celestial Chase</a></li>
+<li><a href="/subevents_list">Subevents</a></li>
+<li><a href="/public_join_events">Join Events</a></li>
+<!-- <li><a href="/events/rainbow_celestial_chase"><font color="blue">*</font> Rainbow Celestial Chase</a></li> -->
+<br>
+
+<li class="navtitle">
+  <img src="/images/xy-icons/061.png" class="icon">
+  <div>Plushies</div>
+</li>
+<li><a href="/plushies?user_id=345230">Plushies</a></li>
+<li><a href="/plushies_trades">Plushie Trades</a></li>
+<li><a href="/plushies_dex">Plushie Dex</a></li>
+<li><a href="/plushies_list">Plushie Listings</a></li>
+<br>
+
+<li class="navtitle navtitle-link">
+  <a class="navtitle-link-child" href="/legendary_areas">
+    <img src="/images/xy-icons/385.png" class="icon">
+    <div>Legendary Areas</div>
+  </a>
+</li>
+
+<li><a href="/legendary_areas?area_id=1">Jirachi's Park</a></li><li><a href="/legendary_areas?area_id=2">Entei's Tower</a></li><li><a href="/legendary_areas?area_id=3">Kyogre's Temple</a></li><li><a href="/legendary_areas?area_id=4">Groudon's Palace</a></li><li><a href="/legendary_areas?area_id=5">Mesprit's Lake</a></li><li><a href="/legendary_areas?area_id=6">Mewtwo's Cavern</a></li><li><a href="/legendary_areas?area_id=7">Manaphy's Haven</a></li><li><a href="/legendary_areas?area_id=8">Eternal Garden</a></li><li><a href="/legendary_areas?area_id=9">Heatran's Mountain</a></li><li><a href="/legendary_areas?area_id=10">Spear Pillar</a></li><li><a href="/legendary_areas?area_id=11">Regigigas' Domain</a></li><li><a href="/legendary_areas?area_id=21">Deep Mewtwo's Cave</a></li><li><a href="/legendary_areas?area_id=25">Moon Gaze Mountain</a></li><li><a href="/legendary_areas?area_id=26">Icebound Cave</a></li><li><a href="/legendary_areas?area_id=27">Sky Pillar</a></li><li><a href="/legendary_areas?area_id=28">Mirage Ruins</a></li><li><a href="/legendary_areas?area_id=29">Latias Heaven</a></li><li><a href="/legendary_areas?area_id=44">Ruins of Alph</a></li>
+    <br>
+    <li class="navtitle navtitle-link">
+      <a class="navtitle-link-child" href="/legendary_areas?kind=exclusive">
+        <img src="/images/xy-icons-shiny/251.png" class="icon">
+        <div>Exclusive Areas</div>
+      </a>
+    </li>
+    <li><a href="/legendary_areas?area_id=12">Great Volcano</a></li><li><a href="/legendary_areas?area_id=13">Distortion World</a></li><li><a href="/legendary_areas?area_id=14">Enigma Island</a></li><li><a href="/legendary_areas?area_id=17">Newmoon Island</a></li><li><a href="/legendary_areas?area_id=22">Burned Tower</a></li><li><a href="/legendary_areas?area_id=23">Pokemon Mansion</a></li>
+</ul>
+</div>
