@@ -874,6 +874,49 @@ def _record_encounter(pokemon):
 
 
 # ============================================================
+# TARGET POKEMON HUNTING
+# ============================================================
+
+def pokemon_matches_target(pokemon_name, target_name):
+    """
+    Return True when the encountered Pokémon matches the
+    requested target.
+
+    Uses normalized EXACT matching, unlike
+    search_pokemon_across_maps() which intentionally does
+    substring matching for browsing maps. Live hunting needs to
+    be stricter - hunting "Pikachu" shouldn't stop on
+    "Shiny Pikachu" just because it contains the word. Variant
+    names can still be hunted directly by typing them in full,
+    e.g. "Shiny Pikachu".
+    """
+
+    if not pokemon_name or not target_name:
+        return False
+
+    return normalize(pokemon_name) == normalize(target_name)
+
+
+def get_target_pokemon():
+    """
+    Ask the user which Pokémon they want to hunt.
+    """
+
+    while True:
+
+        target = input(
+            "\nEnter the Pokémon to hunt: "
+        ).strip()
+
+        if target:
+            return target
+
+        print(
+            "✗ Please enter a Pokémon name."
+        )
+
+
+# ============================================================
 # ENCOUNTER FIGHT
 # ============================================================
 
@@ -1312,7 +1355,10 @@ def open_exclusive_area(
 # HANDLE ENCOUNTER
 # ============================================================
 
-def handle_search_encounter(driver):
+def handle_search_encounter(
+    driver,
+    target_pokemon=None
+):
 
     encountered = get_encounter_pokemon(
         driver
@@ -1334,6 +1380,43 @@ def handle_search_encounter(driver):
 
         _record_encounter(
             encountered
+        )
+
+    # ----------------------------------------------------
+    # TARGET MODE
+    #
+    # If hunting a specific Pokémon and this isn't it,
+    # skip the encounter entirely - it's not a failure,
+    # just the wrong Pokémon. "not_target" is distinct from
+    # False so run_searches() can tell the two apart and
+    # keep searching normally instead of treating this as
+    # something going wrong.
+    # ----------------------------------------------------
+
+    if target_pokemon is not None:
+
+        if not encountered:
+
+            print(
+                "  → Could not identify encountered "
+                "Pokémon - skipping."
+            )
+
+            return "not_target"
+
+        if not pokemon_matches_target(
+            encountered["name"],
+            target_pokemon
+        ):
+
+            print(
+                f"  → Not target ({target_pokemon})."
+            )
+
+            return "not_target"
+
+        print(
+            f"  ★ TARGET FOUND: {encountered['name']}"
         )
 
     if not click_encounter_fight(
@@ -1395,6 +1478,7 @@ def run_searches(
     searches,
     is_exclusive=False,
     area=None,
+    target_pokemon=None,
 ):
 
     print()
@@ -1466,9 +1550,30 @@ def run_searches(
                 "✓ Pokémon encounter detected."
             )
 
-            if not handle_search_encounter(
-                driver
-            ):
+            encounter_result = handle_search_encounter(
+                driver,
+                target_pokemon=target_pokemon
+            )
+
+            if encounter_result == "not_target":
+
+                print(
+                    "  → Continuing search."
+                )
+
+                time.sleep(
+                    random.uniform(
+                        1.0,
+                        1.5
+                    )
+                )
+
+                completed += 1
+                search_number += 1
+
+                continue
+
+            if not encounter_result:
 
                 print(
                     "✗ Encounter handling failed."
@@ -1553,6 +1658,316 @@ def run_searches(
     )
 
     return True
+
+
+# ============================================================
+# TARGET POKEMON HUNTING MODE
+# ============================================================
+
+def target_pokemon_mode(driver):
+    """
+    Prompt for a Pokémon to hunt, pick a map, then run searches
+    that skip every non-matching encounter and only attempt
+    capture on the target. Reuses the exact same map-opening,
+    search-progress, and run_searches() machinery as normal
+    searching - target_pokemon is just threaded through.
+    """
+
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        "HUNT SPECIFIC POKÉMON"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    target_pokemon = get_target_pokemon()
+
+    print()
+    print(
+        f"★ Target Pokémon: {target_pokemon}"
+    )
+
+    # --------------------------------------------------------
+    # Choose map.
+    # --------------------------------------------------------
+
+    exclusive_maps = get_exclusive_maps(
+        driver
+    )
+
+    print()
+    print(
+        "REGULAR MAPS"
+    )
+
+    print(
+        "-" * 60
+    )
+
+    for i, map_name in enumerate(
+        MAPS,
+        1
+    ):
+
+        print(
+            f"{i:2}. {map_name}"
+        )
+
+    exclusive_start = len(MAPS) + 1
+
+    if exclusive_maps:
+
+        print()
+        print(
+            "EXCLUSIVE LEGENDARY AREAS"
+        )
+
+        print(
+            "-" * 60
+        )
+
+        for i, area in enumerate(
+            exclusive_maps,
+            exclusive_start
+        ):
+
+            print(
+                f"{i:2}. {area['name']}"
+            )
+
+    back_number = (
+        len(MAPS)
+        + len(exclusive_maps)
+        + 1
+    )
+
+    print(
+        f"{back_number:2}. Back"
+    )
+
+    while True:
+
+        choice = input(
+            f"\nChoose map number "
+            f"(1-{back_number}): "
+        ).strip()
+
+        try:
+
+            number = int(
+                choice
+            )
+
+        except ValueError:
+
+            print(
+                "✗ Invalid choice."
+            )
+
+            continue
+
+        if number == back_number:
+
+            return
+
+        if 1 <= number <= len(MAPS):
+
+            map_name = MAPS[number - 1]
+
+            is_exclusive = False
+            area = None
+
+            break
+
+        if (
+            exclusive_maps
+            and number <= (len(MAPS) + len(exclusive_maps))
+        ):
+
+            exclusive_index = (
+                number - len(MAPS) - 1
+            )
+
+            area = exclusive_maps[exclusive_index]
+
+            map_name = area["name"]
+
+            is_exclusive = True
+
+            break
+
+        print(
+            "✗ Invalid choice."
+        )
+
+    # --------------------------------------------------------
+    # Open selected map.
+    # --------------------------------------------------------
+
+    if is_exclusive:
+
+        opened = open_exclusive_area(
+            driver,
+            area
+        )
+
+    else:
+
+        opened = open_map(
+            driver,
+            map_name
+        )
+
+    if not opened:
+
+        print(
+            "✗ Could not open selected map."
+        )
+
+        return
+
+    current, maximum = get_search_progress(
+        driver
+    )
+
+    if current is not None:
+
+        remaining = max(
+            0,
+            maximum - current
+        )
+
+        print()
+        print(
+            f"Current progress: {current}/{maximum}"
+        )
+
+        print(
+            f"Remaining searches: {remaining}"
+        )
+
+    else:
+
+        remaining = 500
+
+    answer = input(
+        f"\nHow many searches? [default {remaining}]: "
+    ).strip()
+
+    if answer:
+
+        try:
+
+            searches = int(
+                answer
+            )
+
+        except ValueError:
+
+            print(
+                "✗ Invalid number."
+            )
+
+            return
+
+    else:
+
+        searches = remaining
+
+    searches = max(
+        0,
+        searches
+    )
+
+    if searches == 0:
+
+        print(
+            "No searches selected."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Reset session Pokémon statistics for a clean read on
+    # this specific hunt.
+    # --------------------------------------------------------
+
+    reset_encountered_pokemon_stats()
+
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        f"HUNTING: {target_pokemon}"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print()
+
+    if not run_searches(
+        driver,
+        map_name,
+        searches,
+        is_exclusive=is_exclusive,
+        area=area,
+        target_pokemon=target_pokemon
+    ):
+
+        print()
+        print(
+            "✗ Target search session stopped."
+        )
+
+        return
+
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        "TARGET SEARCH COMPLETE"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    stats = get_encountered_pokemon_stats()
+
+    print()
+    print(
+        f"Target:          {target_pokemon}"
+    )
+
+    print(
+        f"Searches:        {searches}"
+    )
+
+    print(
+        f"Encounters:      {stats['total']}"
+    )
+
+    print(
+        f"Pokémon caught:  {stats['caught_total']}"
+    )
+
+    print()
+
+    input(
+        "Press Enter to return..."
+    )
 
 
 # ============================================================

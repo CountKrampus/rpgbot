@@ -18,6 +18,7 @@ from search import (
     get_search_stats,
     search_pokemon_across_maps,
     get_encountered_pokemon_stats,
+    target_pokemon_mode,
 )
 from capture import get_capture_stats
 from box import search_box
@@ -35,7 +36,8 @@ BANNER = (
     "4. Search Settings\n"
     "5. Search Statistics\n"
     "6. Search Box\n"
-    "7. Back"
+    "7. Hunt Specific Pokémon\n"
+    "8. Back"
 )
 
 
@@ -316,6 +318,9 @@ def search_menu(driver):
             _search_box(driver)
 
         elif choice == "7":
+            target_pokemon_mode(driver)
+
+        elif choice == "8":
             return
 
         else:
