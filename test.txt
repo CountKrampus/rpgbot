@@ -1,0 +1,582 @@
+Account page html:
+
+<table class="tnav_border dont-change-mobile"><tbody><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+User ID:
+</td>
+<td class="tnav" align="center" width="75%">
+#345,230
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Username:
+</td>
+<td class="tnav" align="center" width="75%">
+<a class="username-component" href="/user?id=345230"><font color="#FF4500">goldisduck</font></a>
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Trainer Title:
+</td>
+<td class="tnav" align="center" width="75%">
+Online Based God
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Trainer Gender:
+</td>
+<td class="tnav" align="center" width="75%">
+  Male
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+  User Group:
+</td>
+<td class="tnav" align="center" width="75%"><font color="">Member</font></td>
+
+</tr>
+<tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Map Level:
+</td>
+<td class="tnav" align="center" width="75%">
+Lv. 65
+</td>
+
+</tr>
+<tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Trainer Level:
+</td>
+<td class="tnav" align="center" width="75%">
+Lv. 619
+</td>
+
+</tr>
+
+<tr>
+  <td class="tnav_left_information" align="center" width="25%">
+  Trainer EXP:
+  </td>
+  <td class="tnav" align="center" width="75%">
+  154,640 EXP (140/250 to level up)
+  </td>
+</tr>
+
+<tr>
+
+</tr><tr>
+  <td class="tnav_left_information" align="center" width="25%">
+  Mining Level:
+  </td>
+  <td class="tnav" align="center" width="75%">
+    Lv. 37
+  </td>
+</tr>
+
+<tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Platinum Coins:
+</td>
+<td class="tnav" align="center" width="75%"><img src="/images/pictures/platinum_coins.png" title="(PCs)" alt="(PCs)"> $<b>3,100,013</b>
+</td>
+
+</tr>
+
+  <tr>
+    <td class="tnav_left_information">
+      Diamond Coins:
+    </td>
+    <td class="tnav">
+      <img src="/images/pictures/diamond_coins.png" title="(DCs)" alt="(DCs)">
+      $<b>59,775</b>
+    </td>
+  </tr>
+  <tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Moon Points:
+</td>
+<td class="tnav" align="center" width="75%">
+  <img src="/images/pictures/moon_points.png">
+  <b>799</b> Moon Points
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+AP:
+</td>
+<td class="tnav" align="center" width="75%">
+995 AP (Team Red)
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Battles Won:
+</td>
+<td class="tnav" align="center" width="75%">
+28,136 battles
+</td>
+
+</tr><tr>
+
+<td class="tnav_left_information" align="center" width="25%">
+Date Registered:
+</td>
+<td class="tnav" align="center" width="75%">
+July 28, 2010 (02:00 PM)
+</td>
+
+</tr><tr>
+
+  <td class="tnav_left_information" align="center" width="25%">
+  Last Login:
+  </td>
+  <td class="tnav" align="center" width="75%">
+  August 26, 2026 (09:06 PM)
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left_information" align="center" width="25%">
+  Play Time:
+  </td>
+  <td class="tnav" align="center" width="75%">
+  40 days 14 hours 59 min 20 sec
+  </td>
+
+  </tr>
+  <tr>
+    <td class="tnav_left_information">Betas:</td>
+    <td class="tnav">
+      <span id="profile-betas">– <a target="_blank" href="/forums/view_topic?topic_id=30399#betas">[Info]</a></span>
+      
+    </td>
+  </tr>
+  </tbody></table>
+
+Legendary area stats:
+
+<table class="tnav_border dont-change-mobile"><tbody><tr>
+
+<td class="tnav_left_information left" width="33%">
+Map Name
+</td>
+<td class="tnav_left_information left" width="33%">
+Total Searches
+</td>
+<td class="tnav_information left" width="33%">
+Searches Today
+</td>
+
+</tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=1">Jirachi's Park</a>
+  </td>
+  <td class="tnav_left left">
+    1,860
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=2">Entei's Tower</a>
+  </td>
+  <td class="tnav_left left">
+    871
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=3">Kyogre's Temple</a>
+  </td>
+  <td class="tnav_left left">
+    1,031
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=4">Groudon's Palace</a>
+  </td>
+  <td class="tnav_left left">
+    976
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=5">Mesprit's Lake</a>
+  </td>
+  <td class="tnav_left left">
+    941
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=6">Mewtwo's Cavern</a>
+  </td>
+  <td class="tnav_left left">
+    1,687
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=7">Manaphy's Haven</a>
+  </td>
+  <td class="tnav_left left">
+    1,251
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=8">Eternal Garden</a>
+  </td>
+  <td class="tnav_left left">
+    2,000
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=9">Heatran's Mountain</a>
+  </td>
+  <td class="tnav_left left">
+    2,579
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=10">Spear Pillar</a>
+  </td>
+  <td class="tnav_left left">
+    1,449
+  </td>
+  <td class="tnav left">
+    1,339
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=11">Regigigas' Domain</a>
+  </td>
+  <td class="tnav_left left">
+    0
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=12">Great Volcano</a>
+  </td>
+  <td class="tnav_left left">
+    86
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=13">Distortion World</a>
+  </td>
+  <td class="tnav_left left">
+    74
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=14">Enigma Island</a>
+  </td>
+  <td class="tnav_left left">
+    143
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=17">Newmoon Island</a>
+  </td>
+  <td class="tnav_left left">
+    254
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=21">Deep Mewtwo's Cave</a>
+  </td>
+  <td class="tnav_left left">
+    0
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=22">Burned Tower</a>
+  </td>
+  <td class="tnav_left left">
+    769
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=23">Pokemon Mansion</a>
+  </td>
+  <td class="tnav_left left">
+    850
+  </td>
+  <td class="tnav left">
+    850
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=24">Spring Oasis</a>
+  </td>
+  <td class="tnav_left left">
+    3
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=25">Moon Gaze Mountain</a>
+  </td>
+  <td class="tnav_left left">
+    3,014
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=26">Icebound Cave</a>
+  </td>
+  <td class="tnav_left left">
+    500
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=27">Sky Pillar</a>
+  </td>
+  <td class="tnav_left left">
+    0
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=28">Mirage Ruins</a>
+  </td>
+  <td class="tnav_left left">
+    0
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left">
+    <a href="/legendary_areas?area_id=44">Ruins of Alph</a>
+  </td>
+  <td class="tnav_left left">
+    0
+  </td>
+  <td class="tnav left">
+    0
+  </td>
+
+  </tr><tr>
+
+  <td class="tnav_left left" style="background: #eee">
+    <b>Total:</b>
+  </td>
+  <td class="tnav_left left">
+    <b>20,338</b>
+  </td>
+  <td class="tnav left">
+    <b>2,189</b>
+  </td>
+
+  </tr>
+</tbody></table>
+
+
+
+Signature:
+
+<tr>
+
+<td class="tnav" align="center" width="100%">
+<font color="red"><font size="2">Pandascakes (PanPan) Is the best person there is&lt;3 - He shall stay here forever.</font></font><br>
+Thank you Latimew for giving me 500m :D<br>
+<br>
+<b><u>Goals:</u></b><br>
+<font color="green">Get E.Ray to 100k [100k/100k]</font><br>
+<font color="green">Get G.Swellow to 100k [100k/100k]</font><br>
+<font color="green">Get R.Giratina to 100k [100k/100k]</font><br>
+<font color="green">Get C.Groudon to 100k [100k/100k]</font><br>
+<br>
+<a target="_blank" href="http://pkmneclipse.net/view_profile.php?user_id=631793">Storage - Approved by Talia</a><br>
+<br>
+Always trading for Gastlys, Chanseys<br>
+<br>
+<table class="quote" cellpadding="0" cellspacing="2" width="100%" style="border: 2px solid black; background-color: #C0C0C0;"><tbody><tr><td class="quote" width="100%" align="center" valign="top" style="text-align: left; font-size: 12px; border: 2px solid black; background-color: #C0C0C0; padding: 2px;"><code><font size="3"></font><center><font size="3"><b><u>------Missing Gastlys------</u></b><br>
+<b>Normal:</b> • Dark • Silver • Golden • Pearl • Astral • Rainbow<br>
+<b>Genesis:</b> • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Shadow • Light • Legacy • Astral • Rainbow<br>
+<b>Relic:</b> • Normal • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Rainbow<br>
+<b>Retro:</b> • Normal • Shiny • Dark • Golden • Crystal • Ruby • Emerald • Shadow • Light • Legacy • Pearl • Astral<br>
+<b>Hyper:</b> • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Shadow • Legacy • Pearl • Astral • Rainbow<br>
+<b>Galaxy:</b> • Normal • Sapphire • Shadow • Rainbow<br>
+<b>Undead:</b> • Normal • Shiny • Dark • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Astral • Rainbow<br>
+<b>Hyper:</b> • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Legacy • Pearl • Astral • Rainbow<br>
+<b>Hyper Galaxy:</b> • Normal • Dark • Golden • Ruby • Shadow • Light • Astral</font></center></code></td></tr></tbody></table>
+</td>
+
+</tr>
+
+edit profile link:
+<li><a href="/edit_profile">Edit Profile</a></li>
+
+edit signature:
+
+<td class="tnav" align="center" width="100%">
+<textarea id="ES_Content" name="ES_Content" class="inputform" cols="80" rows="15">[color=red][size=2]Pandascakes (PanPan) Is the best person there is&lt;3 - He shall stay here forever.[/size][/color]
+Thank you Latimew for giving me 500m :D
+
+[b][u]Goals:[/u][/b]
+[color=green]Get E.Ray to 100k [100k/100k][/color]
+[color=green]Get G.Swellow to 100k [100k/100k][/color]
+[color=green]Get R.Giratina to 100k [100k/100k][/color]
+[color=green]Get C.Groudon to 100k [100k/100k][/color]
+
+[url=http://pkmneclipse.net/view_profile.php?user_id=631793]Storage - Approved by Talia[/url]
+
+Always trading for Gastlys, Chanseys
+
+[code][size=3][center][b][u]------Missing Gastlys------[/b][/u]
+[b]Normal:[/b] • Dark • Silver • Golden • Pearl • Astral • Rainbow
+[b]Genesis:[/b] • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Shadow • Light • Legacy • Astral • Rainbow
+[b]Relic:[/b] • Normal • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Rainbow
+[b]Retro:[/b] • Normal • Shiny • Dark • Golden • Crystal • Ruby • Emerald • Shadow • Light • Legacy • Pearl • Astral
+[b]Hyper:[/b] • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Shadow • Legacy • Pearl • Astral • Rainbow
+[b]Galaxy:[/b] • Normal • Sapphire • Shadow • Rainbow
+[b]Undead:[/b] • Normal • Shiny • Dark • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Astral • Rainbow
+[b]Hyper:[/b] • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Legacy • Pearl • Astral • Rainbow
+[b]Hyper Galaxy:[/b] • Normal • Dark • Golden • Ruby • Shadow • Light • Astral[/size][/center][/code]</textarea>
+</td>
+
+"save signature button:"
+<input type="submit" name="ES_Submit" value="Edit Signature" class="inputsubmit">
+
+Live signature preview:
+<div id="signature-preview">
+    <font color="red"><font size="2">Pandascakes (PanPan) Is the best person there is&lt;3 - He shall stay here forever.</font></font><br>
+Thank you Latimew for giving me 500m :D<br>
+<br>
+<b><u>Goals:</u></b><br>
+<font color="green">Get E.Ray to 100k [100k/100k]</font><br>
+<font color="green">Get G.Swellow to 100k [100k/100k]</font><br>
+<font color="green">Get R.Giratina to 100k [100k/100k]</font><br>
+<font color="green">Get C.Groudon to 100k [100k/100k]</font><br>
+<br>
+<a target="_blank" href="http://pkmneclipse.net/view_profile.php?user_id=631793">Storage - Approved by Talia</a><br>
+<br>
+Always trading for Gastlys, Chanseys<br>
+<br>
+<table class="quote" cellpadding="0" cellspacing="2" width="100%" style="border: 2px solid black; background-color: #C0C0C0;"><tbody><tr><td class="quote" width="100%" align="center" valign="top" style="text-align: left; font-size: 12px; border: 2px solid black; background-color: #C0C0C0; padding: 2px;"><code><font size="3"></font><center><font size="3"><b><u>------Missing Gastlys------</u></b><br>
+<b>Normal:</b> • Dark • Silver • Golden • Pearl • Astral • Rainbow<br>
+<b>Genesis:</b> • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Shadow • Light • Legacy • Astral • Rainbow<br>
+<b>Relic:</b> • Normal • Shiny • Dark • Silver • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Rainbow<br>
+<b>Retro:</b> • Normal • Shiny • Dark • Golden • Crystal • Ruby • Emerald • Shadow • Light • Legacy • Pearl • Astral<br>
+<b>Hyper:</b> • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Shadow • Legacy • Pearl • Astral • Rainbow<br>
+<b>Galaxy:</b> • Normal • Sapphire • Shadow • Rainbow<br>
+<b>Undead:</b> • Normal • Shiny • Dark • Golden • Crystal • Ruby • Sapphire • Emerald • Light • Legacy • Pearl • Astral • Rainbow<br>
+<b>Hyper:</b> • Normal • Shiny • Dark • Crystal • Ruby • Sapphire • Legacy • Pearl • Astral • Rainbow<br>
+<b>Hyper Galaxy:</b> • Normal • Dark • Golden • Ruby • Shadow • Light • Astral</font></center></code></td></tr></tbody></table>
+  </div>
