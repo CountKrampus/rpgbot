@@ -18,6 +18,8 @@ from training import (
     MAX_LEVEL_BATTLES,
     DIFFICULTY_VALUES,
     DIFFICULTY_LABELS,
+    get_between_battles_wait as training_get_between_battles_wait,
+    set_between_battles_wait as training_set_between_battles_wait,
 )
 
 
@@ -46,6 +48,16 @@ def set_battle_count_setting(value):
 
 def get_difficulty_setting():
     return _difficulty_setting
+
+
+def get_between_battles_wait():
+    """Return (min, max) tuple for wait between battles."""
+    return training_get_between_battles_wait()
+
+
+def set_menu_between_battles_wait(min_val, max_val):
+    """Set wait time between battles (wrapper to avoid name conflict)."""
+    return training_set_between_battles_wait(min_val, max_val)
 
 
 def set_difficulty_setting(value):

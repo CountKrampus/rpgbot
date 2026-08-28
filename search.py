@@ -66,6 +66,50 @@ EXCLUSIVE_AREAS_URL = (
 
 
 # ============================================================
+# AUTOMATION BEHAVIOR SETTINGS
+# ============================================================
+
+_auto_stop_consecutive_failures = None  # None = disabled, int = threshold
+_log_level = "normal"  # "verbose", "normal", "minimal"
+
+
+def get_auto_stop_consecutive_failures():
+    """Return consecutive failure threshold, or None if disabled."""
+    return _auto_stop_consecutive_failures
+
+
+def set_auto_stop_consecutive_failures(threshold):
+    """Set consecutive failure threshold (None to disable)."""
+    global _auto_stop_consecutive_failures
+    
+    if threshold is None:
+        _auto_stop_consecutive_failures = None
+        return True
+    
+    if isinstance(threshold, int) and threshold > 0:
+        _auto_stop_consecutive_failures = threshold
+        return True
+    
+    return False
+
+
+def get_log_level():
+    """Return current log level: 'verbose', 'normal', or 'minimal'."""
+    return _log_level
+
+
+def set_log_level(level):
+    """Set log level: 'verbose', 'normal', or 'minimal'."""
+    global _log_level
+    
+    if level in ("verbose", "normal", "minimal"):
+        _log_level = level
+        return True
+    
+    return False
+
+
+# ============================================================
 # SEARCH STATISTICS / HISTORY
 # ============================================================
 #

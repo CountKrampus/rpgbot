@@ -160,6 +160,32 @@ ATTACK_CONFIRM_TIMEOUT = 4
 
 
 # ============================================================
+# BETWEEN BATTLES WAIT (Configurable)
+# ============================================================
+
+_between_battles_wait = BETWEEN_BATTLES_WAIT
+
+
+def get_between_battles_wait():
+    """Return (min, max) tuple for wait between battles."""
+    return _between_battles_wait
+
+
+def set_between_battles_wait(min_seconds, max_seconds):
+    """Set wait time between battles."""
+    global _between_battles_wait
+    
+    if min_seconds <= 0 or max_seconds <= 0:
+        return False
+    
+    if min_seconds > max_seconds:
+        min_seconds, max_seconds = max_seconds, min_seconds
+    
+    _between_battles_wait = (min_seconds, max_seconds)
+    return True
+
+
+# ============================================================
 # BATTLE STATES
 # ============================================================
 
@@ -1761,8 +1787,8 @@ def train_mode(
 
         time.sleep(
             random.uniform(
-                BETWEEN_BATTLES_WAIT[0],
-                BETWEEN_BATTLES_WAIT[1]
+                _between_battles_wait[0],
+                _between_battles_wait[1]
             )
         )
 

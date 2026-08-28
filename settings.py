@@ -28,9 +28,15 @@ DEFAULT_SETTINGS = {
     ],
     "training_battles_per_session": 100,
     "training_battle_difficulty": None,
+    "training_between_battles_min": 0.5,
+    "training_between_battles_max": 0.8,
     "break_enabled": False,
     "break_interval_minutes": 120,
     "break_duration_minutes": 30,
+    "capture_retry_limit": 3,
+    "skip_shiny_encounters": False,
+    "auto_stop_on_consecutive_failures": None,
+    "log_level": "normal",
 }
 
 
@@ -85,16 +91,26 @@ def gather_current_settings():
     into a dict ready to save.
     """
 
-    from search import get_search_delay
-    from capture import get_preferred_ball_order
+    from search import (
+        get_search_delay,
+        get_auto_stop_consecutive_failures,
+        get_log_level,
+    )
+    from capture import (
+        get_preferred_ball_order,
+        get_capture_retry_limit,
+        get_skip_shiny_encounters,
+    )
     from menus.training_menu import (
         get_battle_count_setting,
         get_difficulty_setting,
     )
+    from training import get_between_battles_wait
     from break_timer import get_break_settings
 
     delay_min, delay_max = get_search_delay()
     break_settings = get_break_settings()
+    between_battles = get_between_battles_wait()
 
     return {
         "search_delay_min": delay_min,
@@ -102,9 +118,15 @@ def gather_current_settings():
         "preferred_ball_order": get_preferred_ball_order(),
         "training_battles_per_session": get_battle_count_setting(),
         "training_battle_difficulty": get_difficulty_setting(),
+        "training_between_battles_min": between_battles[0],
+        "training_between_battles_max": between_battles[1],
         "break_enabled": break_settings["enabled"],
         "break_interval_minutes": break_settings["break_interval_minutes"],
         "break_duration_minutes": break_settings["break_duration_minutes"],
+        "capture_retry_limit": get_capture_retry_limit(),
+        "skip_shiny_encounters": get_skip_shiny_encounters(),
+        "auto_stop_on_consecutive_failures": get_auto_stop_consecutive_failures(),
+        "log_level": get_log_level(),
     }
 
 
@@ -115,12 +137,21 @@ def apply_settings(settings):
     after a reset.
     """
 
-    from search import set_search_delay
-    from capture import set_preferred_ball_order
+    from search import (
+        set_search_delay,
+        set_auto_stop_consecutive_failures,
+        set_log_level,
+    )
+    from capture import (
+        set_preferred_ball_order,
+        set_capture_retry_limit,
+        set_skip_shiny_encounters,
+    )
     from menus.training_menu import (
         set_battle_count_setting,
         set_difficulty_setting,
     )
+    from training import set_between_battles_wait
     from break_timer import (
         set_break_enabled,
         set_break_interval,
@@ -152,6 +183,17 @@ def apply_settings(settings):
         settings.get("training_battle_difficulty")
     )
 
+    set_between_battles_wait(
+        settings.get(
+            "training_between_battles_min",
+            DEFAULT_SETTINGS["training_between_battles_min"],
+        ),
+        settings.get(
+            "training_between_battles_max",
+            DEFAULT_SETTINGS["training_between_battles_max"],
+        ),
+    )
+
     set_break_enabled(
         settings.get(
             "break_enabled",
@@ -170,5 +212,33 @@ def apply_settings(settings):
         settings.get(
             "break_duration_minutes",
             DEFAULT_SETTINGS["break_duration_minutes"],
+        )
+    )
+
+    set_capture_retry_limit(
+        settings.get(
+            "capture_retry_limit",
+            DEFAULT_SETTINGS["capture_retry_limit"],
+        )
+    )
+
+    set_skip_shiny_encounters(
+        settings.get(
+            "skip_shiny_encounters",
+            DEFAULT_SETTINGS["skip_shiny_encounters"],
+        )
+    )
+
+    set_auto_stop_consecutive_failures(
+        settings.get(
+            "auto_stop_on_consecutive_failures",
+            DEFAULT_SETTINGS["auto_stop_on_consecutive_failures"],
+        )
+    )
+
+    set_log_level(
+        settings.get(
+            "log_level",
+            DEFAULT_SETTINGS["log_level"],
         )
     )

@@ -61,6 +61,42 @@ def set_preferred_ball_order(order):
 
 
 # ============================================================
+# CAPTURE BEHAVIOR SETTINGS
+# ============================================================
+
+_capture_retry_limit = 3
+_skip_shiny_encounters = False
+
+
+def get_capture_retry_limit():
+    """Return max capture attempts per encounter."""
+    return _capture_retry_limit
+
+
+def set_capture_retry_limit(limit):
+    """Set max capture attempts per encounter."""
+    global _capture_retry_limit
+    
+    if limit <= 0:
+        return False
+    
+    _capture_retry_limit = int(limit)
+    return True
+
+
+def get_skip_shiny_encounters():
+    """Return True if shiny encounters should be skipped."""
+    return _skip_shiny_encounters
+
+
+def set_skip_shiny_encounters(skip):
+    """Set whether to skip shiny encounters."""
+    global _skip_shiny_encounters
+    _skip_shiny_encounters = bool(skip)
+    return True
+
+
+# ============================================================
 # CAPTURE STATISTICS
 # ============================================================
 #
