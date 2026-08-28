@@ -7,11 +7,15 @@ since this menu was first written (it now returns a stats dict
 - battles/current_level/target_level/exp_gained - instead of a
 plain battle count, and gained battle-difficulty support) - this
 file is updated to match that shape.
+
+Advanced options (train until level, etc.) are also exposed here.
 """
 
 from training import (
     train_mode,
+    train_until_level,
     MAX_BATTLES,
+    MAX_LEVEL_BATTLES,
     DIFFICULTY_VALUES,
     DIFFICULTY_LABELS,
 )
@@ -67,6 +71,70 @@ def _start_training(driver):
     )
 
     _last_session_result = result
+
+
+def _train_until_level_menu(driver):
+
+    global _last_session_result
+
+    print()
+    print("=" * 60)
+    print("TRAIN UNTIL LEVEL")
+    print("=" * 60)
+    print()
+
+    target_level_input = input(
+        "Target level: "
+    ).strip()
+
+    try:
+        target_level = int(target_level_input)
+
+    except ValueError:
+        print("✗ Invalid level number.")
+        return
+
+    if target_level <= 0:
+        print("✗ Level must be greater than 0.")
+        return
+
+    max_safety_battles = input(
+        f"Safety limit in battles "
+        f"[default {MAX_LEVEL_BATTLES:,}]: "
+    ).strip()
+
+    if max_safety_battles:
+
+        try:
+            max_safety_battles = int(max_safety_battles)
+
+        except ValueError:
+            print("✗ Invalid number - using default.")
+            max_safety_battles = MAX_LEVEL_BATTLES
+
+    else:
+        max_safety_battles = MAX_LEVEL_BATTLES
+
+    print()
+    print(
+        f"Starting training until level {target_level:,}..."
+    )
+    print(
+        f"(Safety limit: {max_safety_battles:,} battles)"
+    )
+
+    result = train_until_level(
+        driver,
+        target_level=target_level,
+        max_battles=max_safety_battles,
+        difficulty=_difficulty_setting,
+    )
+
+    _last_session_result = result
+
+    print()
+    input("Press Enter to return to training menu...")
+
 
 
 def _training_settings():
@@ -191,10 +259,11 @@ def training_menu(driver):
         print("TRAINING")
         print("=" * 60)
         print()
-        print("1. Start Training")
-        print("2. Training Settings")
-        print("3. View Training Status")
-        print("4. Back")
+        print("1. Start Training (battle count)")
+        print("2. Train Until Level")
+        print("3. Training Settings")
+        print("4. View Training Status")
+        print("5. Back")
 
         choice = input("\nChoose: ").strip()
 
@@ -202,12 +271,15 @@ def training_menu(driver):
             _start_training(driver)
 
         elif choice == "2":
-            _training_settings()
+            _train_until_level_menu(driver)
 
         elif choice == "3":
-            _training_status()
+            _training_settings()
 
         elif choice == "4":
+            _training_status()
+
+        elif choice == "5":
             return
 
         else:
