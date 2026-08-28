@@ -10,6 +10,7 @@ from selenium.common.exceptions import (
     NoSuchElementException,
 )
 
+from break_check import check_and_handle_break
 from utils import (
     safe_click,
     normalize,
@@ -1764,6 +1765,9 @@ def train_mode(
                 BETWEEN_BATTLES_WAIT[1]
             )
         )
+
+        # Check if break mode is due
+        check_and_handle_break()
 
     # ========================================================
     # FINAL RESULT

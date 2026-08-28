@@ -10,6 +10,7 @@ from selenium.common.exceptions import (
 
 from config import WAIT_LONG
 from utils import safe_click, normalize
+from break_check import check_and_handle_break
 
 
 # ============================================================
@@ -1148,6 +1149,9 @@ def trade_mode(driver):
         print("=" * 60)
         print("✓ TRADE SUBMITTED")
         print("=" * 60)
+
+        # Check if break mode is due
+        check_and_handle_break()
 
         print(
             "\nReturning to main menu..."

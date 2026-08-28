@@ -11,6 +11,7 @@ from selenium.common.exceptions import (
 
 from capture import capture_encounter
 from database_search import hunt_pokemon as db_hunt_pokemon
+from break_check import check_and_handle_break
 from utils import (
     safe_click,
     normalize,
@@ -3612,6 +3613,9 @@ def _run_search_session(
             )
 
             return
+
+        # Check if break mode is due
+        check_and_handle_break()
 
         action = search_complete_menu(
             driver,

@@ -13,6 +13,7 @@ from config import MINES_URL, WAIT_LONG
 from helpers import safe_click, wait_for_document_ready
 from search import find_encounter_fight, click_encounter_fight
 from capture import capture_encounter
+from break_check import check_and_handle_break
 
 
 # ============================================================
@@ -1684,6 +1685,12 @@ def miner_mode(driver):
         print(
             "  ✓ Mining result processed."
         )
+
+        # ----------------------------------------------------
+        # Check if break mode is due
+        # ----------------------------------------------------
+
+        check_and_handle_break()
 
         # ----------------------------------------------------
         # Short pause before next mine.
