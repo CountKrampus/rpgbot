@@ -506,6 +506,10 @@ def select_best_ball(driver):
                                 f"  ✓ {selected} clicked."
                             )
 
+                            # Wait for JavaScript handler to complete
+                            # (item_choice() is async)
+                            time.sleep(0.5)
+
                             _record_ball_used(
                                 selected
                             )
