@@ -15,6 +15,12 @@ from capture import (
     get_preferred_ball_order,
     set_preferred_ball_order,
 )
+from break_timer import (
+    get_break_settings,
+    set_break_enabled,
+    set_break_interval,
+    set_break_duration,
+)
 
 
 def _capture_settings():
@@ -92,6 +98,89 @@ def _reset_settings():
     input("\nPress Enter to return to settings...")
 
 
+def _break_settings():
+
+    print()
+    print("=" * 60)
+    print("BREAK TIMER SETTINGS")
+    print("=" * 60)
+
+    current = get_break_settings()
+
+    while True:
+
+        print()
+        print(f"Break Timer: {'ENABLED' if current['enabled'] else 'DISABLED'}")
+        print(f"Break after: {current['break_interval_minutes']} minutes")
+        print(f"Break duration: {current['break_duration_minutes']} minutes")
+        print()
+        print("1. Toggle break timer on/off")
+        print("2. Set break interval (minutes)")
+        print("3. Set break duration (minutes)")
+        print("4. Back")
+
+        choice = input("\nChoose: ").strip()
+
+        if choice == "1":
+
+            new_state = not current["enabled"]
+            set_break_enabled(new_state)
+            current["enabled"] = new_state
+            status = "enabled" if new_state else "disabled"
+            print(f"✓ Break timer {status}.")
+
+        elif choice == "2":
+
+            try:
+                minutes = int(
+                    input(
+                        f"Break after how many minutes? "
+                        f"(currently {current['break_interval_minutes']}): "
+                    ).strip()
+                )
+
+                if minutes <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                set_break_interval(minutes)
+                current["break_interval_minutes"] = minutes
+                print(f"✓ Break interval set to {minutes} minutes.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "3":
+
+            try:
+                minutes = int(
+                    input(
+                        f"Break duration in minutes? "
+                        f"(currently {current['break_duration_minutes']}): "
+                    ).strip()
+                )
+
+                if minutes <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                set_break_duration(minutes)
+                current["break_duration_minutes"] = minutes
+                print(f"✓ Break duration set to {minutes} minutes.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "4":
+
+            input("\nPress Enter to return to settings...")
+            return
+
+        else:
+
+            print("✗ Invalid choice.")
+
+
 def settings_menu(driver):
     while True:
 
@@ -103,9 +192,10 @@ def settings_menu(driver):
         print("1. Search Settings")
         print("2. Training Settings")
         print("3. Capture Settings")
-        print("4. Save Settings")
-        print("5. Reset Settings")
-        print("6. Back")
+        print("4. Break Timer Settings")
+        print("5. Save Settings")
+        print("6. Reset Settings")
+        print("7. Back")
 
         choice = input("\nChoose: ").strip()
 
@@ -119,12 +209,15 @@ def settings_menu(driver):
             _capture_settings()
 
         elif choice == "4":
-            _save_settings()
+            _break_settings()
 
         elif choice == "5":
-            _reset_settings()
+            _save_settings()
 
         elif choice == "6":
+            _reset_settings()
+
+        elif choice == "7":
             return
 
         else:

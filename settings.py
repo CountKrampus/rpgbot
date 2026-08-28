@@ -28,6 +28,9 @@ DEFAULT_SETTINGS = {
     ],
     "training_battles_per_session": 100,
     "training_battle_difficulty": None,
+    "break_enabled": False,
+    "break_interval_minutes": 120,
+    "break_duration_minutes": 30,
 }
 
 
@@ -88,8 +91,10 @@ def gather_current_settings():
         get_battle_count_setting,
         get_difficulty_setting,
     )
+    from break_timer import get_break_settings
 
     delay_min, delay_max = get_search_delay()
+    break_settings = get_break_settings()
 
     return {
         "search_delay_min": delay_min,
@@ -97,6 +102,9 @@ def gather_current_settings():
         "preferred_ball_order": get_preferred_ball_order(),
         "training_battles_per_session": get_battle_count_setting(),
         "training_battle_difficulty": get_difficulty_setting(),
+        "break_enabled": break_settings["enabled"],
+        "break_interval_minutes": break_settings["break_interval_minutes"],
+        "break_duration_minutes": break_settings["break_duration_minutes"],
     }
 
 
@@ -112,6 +120,11 @@ def apply_settings(settings):
     from menus.training_menu import (
         set_battle_count_setting,
         set_difficulty_setting,
+    )
+    from break_timer import (
+        set_break_enabled,
+        set_break_interval,
+        set_break_duration,
     )
 
     set_search_delay(
@@ -137,4 +150,25 @@ def apply_settings(settings):
 
     set_difficulty_setting(
         settings.get("training_battle_difficulty")
+    )
+
+    set_break_enabled(
+        settings.get(
+            "break_enabled",
+            DEFAULT_SETTINGS["break_enabled"],
+        )
+    )
+
+    set_break_interval(
+        settings.get(
+            "break_interval_minutes",
+            DEFAULT_SETTINGS["break_interval_minutes"],
+        )
+    )
+
+    set_break_duration(
+        settings.get(
+            "break_duration_minutes",
+            DEFAULT_SETTINGS["break_duration_minutes"],
+        )
     )

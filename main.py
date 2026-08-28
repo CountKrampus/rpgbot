@@ -3,6 +3,7 @@ from browser import setup_driver
 from login import login
 from menus.main_menu import main_menu
 import settings
+from break_timer import initialize_break_timer
 
 
 def main():
@@ -45,6 +46,8 @@ def main():
         settings.apply_settings(
             settings.load_settings()
         )
+
+        initialize_break_timer()
 
         main_menu(driver)
 
