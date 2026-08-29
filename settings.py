@@ -46,6 +46,9 @@ DEFAULT_SETTINGS = {
     "browser_timeout_seconds": 20,
     "max_connection_retries": 3,
     "slow_network_mode": False,
+    "session_time_limit_minutes": None,
+    "auto_logout_after_session": False,
+    "notify_on_shiny_encounter": True,
 }
 
 
@@ -129,6 +132,9 @@ def gather_current_settings():
     from utils import (
         get_browser_timeout,
         get_slow_network_mode,
+        get_session_time_limit,
+        get_auto_logout_after_session,
+        get_notify_on_shiny_encounter,
     )
 
     delay_min, delay_max = get_search_delay()
@@ -159,6 +165,9 @@ def gather_current_settings():
         "browser_timeout_seconds": get_browser_timeout(),
         "max_connection_retries": get_max_connection_retries(),
         "slow_network_mode": get_slow_network_mode(),
+        "session_time_limit_minutes": get_session_time_limit(),
+        "auto_logout_after_session": get_auto_logout_after_session(),
+        "notify_on_shiny_encounter": get_notify_on_shiny_encounter(),
     }
 
 
@@ -201,6 +210,9 @@ def apply_settings(settings):
     from utils import (
         set_browser_timeout,
         set_slow_network_mode,
+        set_session_time_limit,
+        set_auto_logout_after_session,
+        set_notify_on_shiny_encounter,
     )
 
     set_search_delay(
@@ -348,5 +360,26 @@ def apply_settings(settings):
         settings.get(
             "slow_network_mode",
             DEFAULT_SETTINGS["slow_network_mode"],
+        )
+    )
+
+    set_session_time_limit(
+        settings.get(
+            "session_time_limit_minutes",
+            DEFAULT_SETTINGS["session_time_limit_minutes"],
+        )
+    )
+
+    set_auto_logout_after_session(
+        settings.get(
+            "auto_logout_after_session",
+            DEFAULT_SETTINGS["auto_logout_after_session"],
+        )
+    )
+
+    set_notify_on_shiny_encounter(
+        settings.get(
+            "notify_on_shiny_encounter",
+            DEFAULT_SETTINGS["notify_on_shiny_encounter"],
         )
     )

@@ -60,6 +60,12 @@ from utils import (
     set_max_connection_retries,
     get_slow_network_mode,
     set_slow_network_mode,
+    get_session_time_limit,
+    set_session_time_limit,
+    get_auto_logout_after_session,
+    set_auto_logout_after_session,
+    get_notify_on_shiny_encounter,
+    set_notify_on_shiny_encounter,
 )
 
 
@@ -223,13 +229,20 @@ def _system_settings():
     while True:
 
         current_level = get_log_level()
+        time_limit = get_session_time_limit()
+        time_limit_str = f"{time_limit} minutes" if time_limit else "DISABLED"
 
         print()
         print(f"Log level: {current_level}")
-        print("  (verbose = all logs, normal = important only, minimal = errors only)")
+        print(f"Session time limit: {time_limit_str}")
+        print(f"Auto-logout: {'YES' if get_auto_logout_after_session() else 'NO'}")
+        print(f"Notify on shiny: {'YES' if get_notify_on_shiny_encounter() else 'NO'}")
         print()
         print("1. Set log level")
-        print("2. Back")
+        print("2. Set session time limit")
+        print("3. Toggle auto-logout")
+        print("4. Toggle shiny notifications")
+        print("5. Back")
 
         choice = input("\nChoose: ").strip()
 
@@ -259,6 +272,51 @@ def _system_settings():
                 print("✗ Invalid choice.")
 
         elif choice == "2":
+
+            try:
+                limit_input = input(
+                    f"Session time limit (minutes)? "
+                    f"(currently {time_limit_str}, or 0 to disable): "
+                ).strip()
+
+                if limit_input == "" or limit_input == "0":
+                    if set_session_time_limit(None):
+                        print("✓ Session time limit disabled.")
+                    else:
+                        print("✗ Invalid value.")
+                    continue
+
+                limit = int(limit_input)
+
+                if limit <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_session_time_limit(limit):
+                    print(f"✓ Session time limit set to {limit} minutes.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "3":
+
+            current = get_auto_logout_after_session()
+            new_state = not current
+            set_auto_logout_after_session(new_state)
+            status = "YES (logout after session)" if new_state else "NO (stay logged in)"
+            print(f"✓ Auto-logout: {status}")
+
+        elif choice == "4":
+
+            current = get_notify_on_shiny_encounter()
+            new_state = not current
+            set_notify_on_shiny_encounter(new_state)
+            status = "YES (notify me)" if new_state else "NO (silent)"
+            print(f"✓ Shiny notifications: {status}")
+
+        elif choice == "5":
 
             input("\nPress Enter to return to settings...")
             return

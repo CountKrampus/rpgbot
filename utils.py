@@ -496,3 +496,56 @@ def get_delay_multiplier():
     Returns 1.5 if slow network mode enabled, 1.0 otherwise.
     """
     return 1.5 if _slow_network_mode else 1.0
+
+
+# ============================================================
+# SESSION MANAGEMENT SETTINGS (Phase 3)
+# ============================================================
+
+_session_time_limit = None  # None = no limit, int = minutes
+_auto_logout_after_session = False
+_notify_on_shiny_encounter = True
+
+
+def get_session_time_limit():
+    """Return session time limit in minutes, or None if disabled."""
+    return _session_time_limit
+
+
+def set_session_time_limit(minutes):
+    """Set session time limit (None to disable)."""
+    global _session_time_limit
+    
+    if minutes is None:
+        _session_time_limit = None
+        return True
+    
+    if isinstance(minutes, int) and minutes > 0:
+        _session_time_limit = minutes
+        return True
+    
+    return False
+
+
+def get_auto_logout_after_session():
+    """Return True if auto-logout is enabled."""
+    return _auto_logout_after_session
+
+
+def set_auto_logout_after_session(enabled):
+    """Set whether to auto-logout when session ends."""
+    global _auto_logout_after_session
+    _auto_logout_after_session = bool(enabled)
+    return True
+
+
+def get_notify_on_shiny_encounter():
+    """Return True if shiny encounter notifications are enabled."""
+    return _notify_on_shiny_encounter
+
+
+def set_notify_on_shiny_encounter(enabled):
+    """Set whether to notify on shiny Pokémon encounters."""
+    global _notify_on_shiny_encounter
+    _notify_on_shiny_encounter = bool(enabled)
+    return True
