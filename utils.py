@@ -451,3 +451,48 @@ def wait_for_clickable(driver, element, timeout=10):
     except Exception:
         
         return False
+
+
+# ============================================================
+# NETWORK SETTINGS (Phase 3)
+# ============================================================
+
+_browser_timeout = 20  # seconds
+_slow_network_mode = False
+
+
+def get_browser_timeout():
+    """Return default browser/element timeout (seconds)."""
+    return _browser_timeout
+
+
+def set_browser_timeout(seconds):
+    """Set default browser/element timeout."""
+    global _browser_timeout
+    
+    if seconds <= 0:
+        return False
+    
+    _browser_timeout = int(seconds)
+    return True
+
+
+def get_slow_network_mode():
+    """Return True if slow network mode is enabled (delays multiplied by 1.5x)."""
+    return _slow_network_mode
+
+
+def set_slow_network_mode(enabled):
+    """Set slow network mode (auto-multiplies delays by 1.5x)."""
+    global _slow_network_mode
+    _slow_network_mode = bool(enabled)
+    return True
+
+
+def get_delay_multiplier():
+    """
+    Get the current delay multiplier based on slow network mode.
+    
+    Returns 1.5 if slow network mode enabled, 1.0 otherwise.
+    """
+    return 1.5 if _slow_network_mode else 1.0

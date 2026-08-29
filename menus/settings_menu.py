@@ -34,6 +34,8 @@ from search import (
     set_search_encounter_timeout,
     get_encounter_detection_retry_delay,
     set_encounter_detection_retry_delay,
+    get_max_connection_retries,
+    set_max_connection_retries,
 )
 from training import (
     get_between_battles_wait,
@@ -50,6 +52,14 @@ from mining import (
     set_mining_encounter_auto_catch,
     get_auto_stop_mining_on_area_cleared,
     set_auto_stop_mining_on_area_cleared,
+)
+from utils import (
+    get_browser_timeout,
+    set_browser_timeout,
+    get_max_connection_retries,
+    set_max_connection_retries,
+    get_slow_network_mode,
+    set_slow_network_mode,
 )
 
 
@@ -424,6 +434,89 @@ def _mining_settings():
             print("✗ Invalid choice.")
 
 
+def _advanced_network_settings():
+
+    print()
+    print("=" * 60)
+    print("ADVANCED SETTINGS — NETWORK")
+    print("=" * 60)
+
+    while True:
+
+        print()
+        print(f"Browser timeout: {get_browser_timeout()} seconds")
+        print(f"Max connection retries: {get_max_connection_retries()}")
+        print(f"Slow network mode: {'ON (delays × 1.5)' if get_slow_network_mode() else 'OFF (normal delays)'}")
+        print()
+        print("1. Set browser timeout")
+        print("2. Set max connection retries")
+        print("3. Toggle slow network mode")
+        print("4. Back")
+
+        choice = input("\nChoose: ").strip()
+
+        if choice == "1":
+
+            try:
+                seconds = int(
+                    input(
+                        f"Browser timeout (seconds)? "
+                        f"(currently {get_browser_timeout()}): "
+                    ).strip()
+                )
+
+                if seconds <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_browser_timeout(seconds):
+                    print(f"✓ Timeout set to {seconds} seconds.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "2":
+
+            try:
+                retries = int(
+                    input(
+                        f"Max connection retries? "
+                        f"(currently {get_max_connection_retries()}): "
+                    ).strip()
+                )
+
+                if retries <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_max_connection_retries(retries):
+                    print(f"✓ Max retries set to {retries}.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "3":
+
+            current = get_slow_network_mode()
+            new_state = not current
+            set_slow_network_mode(new_state)
+            status = "ON (all delays × 1.5)" if new_state else "OFF (normal delays)"
+            print(f"✓ Slow network mode: {status}")
+
+        elif choice == "4":
+
+            input("\nPress Enter to return to settings...")
+            return
+
+        else:
+
+            print("✗ Invalid choice.")
+
+
 def _save_settings():
 
     current = settings.gather_current_settings()
@@ -557,8 +650,8 @@ def settings_menu(driver):
         print("3. Capture Settings")
         print("4. Safety Settings")
         print("5. System Settings")
-        print("6. Advanced Settings")
-        print("7. Mining Settings")
+        print("6. Mining Settings")
+        print("7. Advanced Settings")
         print("8. Break Timer Settings")
         print("9. Save Settings")
         print("10. Reset Settings")
@@ -582,10 +675,10 @@ def settings_menu(driver):
             _system_settings()
 
         elif choice == "6":
-            _advanced_timing_settings()
+            _mining_settings()
 
         elif choice == "7":
-            _mining_settings()
+            _advanced_submenu()
 
         elif choice == "8":
             _break_settings()
@@ -599,5 +692,34 @@ def settings_menu(driver):
         elif choice == "11":
             return
 
+        else:
+            print("✗ Invalid choice.")
+
+
+def _advanced_submenu():
+    """Submenu for Advanced Settings with Timing and Network options."""
+    
+    while True:
+        
+        print()
+        print("=" * 60)
+        print("ADVANCED SETTINGS")
+        print("=" * 60)
+        print()
+        print("1. Timing Settings")
+        print("2. Network Settings")
+        print("3. Back")
+        
+        choice = input("\nChoose: ").strip()
+        
+        if choice == "1":
+            _advanced_timing_settings()
+        
+        elif choice == "2":
+            _advanced_network_settings()
+        
+        elif choice == "3":
+            return
+        
         else:
             print("✗ Invalid choice.")

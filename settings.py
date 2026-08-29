@@ -43,6 +43,9 @@ DEFAULT_SETTINGS = {
     "mine_result_poll_interval_ms": 150,
     "mining_encounter_auto_catch": True,
     "auto_stop_mining_on_area_cleared": True,
+    "browser_timeout_seconds": 20,
+    "max_connection_retries": 3,
+    "slow_network_mode": False,
 }
 
 
@@ -103,6 +106,8 @@ def gather_current_settings():
         get_log_level,
         get_search_encounter_timeout,
         get_encounter_detection_retry_delay,
+        get_max_connection_retries,
+        set_max_connection_retries,
     )
     from capture import (
         get_preferred_ball_order,
@@ -121,6 +126,10 @@ def gather_current_settings():
     )
     from training import get_between_battles_wait
     from break_timer import get_break_settings
+    from utils import (
+        get_browser_timeout,
+        get_slow_network_mode,
+    )
 
     delay_min, delay_max = get_search_delay()
     break_settings = get_break_settings()
@@ -147,6 +156,9 @@ def gather_current_settings():
         "mine_result_poll_interval_ms": get_mine_result_poll_interval(),
         "mining_encounter_auto_catch": get_mining_encounter_auto_catch(),
         "auto_stop_mining_on_area_cleared": get_auto_stop_mining_on_area_cleared(),
+        "browser_timeout_seconds": get_browser_timeout(),
+        "max_connection_retries": get_max_connection_retries(),
+        "slow_network_mode": get_slow_network_mode(),
     }
 
 
@@ -163,6 +175,7 @@ def apply_settings(settings):
         set_log_level,
         set_search_encounter_timeout,
         set_encounter_detection_retry_delay,
+        set_max_connection_retries,
     )
     from capture import (
         set_preferred_ball_order,
@@ -184,6 +197,10 @@ def apply_settings(settings):
         set_break_enabled,
         set_break_interval,
         set_break_duration,
+    )
+    from utils import (
+        set_browser_timeout,
+        set_slow_network_mode,
     )
 
     set_search_delay(
@@ -310,5 +327,26 @@ def apply_settings(settings):
         settings.get(
             "auto_stop_mining_on_area_cleared",
             DEFAULT_SETTINGS["auto_stop_mining_on_area_cleared"],
+        )
+    )
+
+    set_browser_timeout(
+        settings.get(
+            "browser_timeout_seconds",
+            DEFAULT_SETTINGS["browser_timeout_seconds"],
+        )
+    )
+
+    set_max_connection_retries(
+        settings.get(
+            "max_connection_retries",
+            DEFAULT_SETTINGS["max_connection_retries"],
+        )
+    )
+
+    set_slow_network_mode(
+        settings.get(
+            "slow_network_mode",
+            DEFAULT_SETTINGS["slow_network_mode"],
         )
     )

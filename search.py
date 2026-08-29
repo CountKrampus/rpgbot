@@ -150,6 +150,29 @@ def set_encounter_detection_retry_delay(milliseconds):
 
 
 # ============================================================
+# NETWORK SETTINGS (Phase 3)
+# ============================================================
+
+_max_connection_retries = 3
+
+
+def get_max_connection_retries():
+    """Return max connection retry attempts."""
+    return _max_connection_retries
+
+
+def set_max_connection_retries(retries):
+    """Set max connection retry attempts."""
+    global _max_connection_retries
+    
+    if retries <= 0:
+        return False
+    
+    _max_connection_retries = int(retries)
+    return True
+
+
+# ============================================================
 # SEARCH STATISTICS / HISTORY
 # ============================================================
 #
