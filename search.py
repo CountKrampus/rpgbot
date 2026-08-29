@@ -110,6 +110,46 @@ def set_log_level(level):
 
 
 # ============================================================
+# TIMING SETTINGS (Phase 3)
+# ============================================================
+
+_search_encounter_timeout = 20  # seconds
+_encounter_detection_retry_delay = 500  # milliseconds
+
+
+def get_search_encounter_timeout():
+    """Return timeout for waiting for encounter (seconds)."""
+    return _search_encounter_timeout
+
+
+def set_search_encounter_timeout(seconds):
+    """Set timeout for waiting for encounter."""
+    global _search_encounter_timeout
+    
+    if seconds <= 0:
+        return False
+    
+    _search_encounter_timeout = int(seconds)
+    return True
+
+
+def get_encounter_detection_retry_delay():
+    """Return delay between polls when looking for encounter (milliseconds)."""
+    return _encounter_detection_retry_delay
+
+
+def set_encounter_detection_retry_delay(milliseconds):
+    """Set delay between encounter detection polls."""
+    global _encounter_detection_retry_delay
+    
+    if milliseconds <= 0:
+        return False
+    
+    _encounter_detection_retry_delay = int(milliseconds)
+    return True
+
+
+# ============================================================
 # SEARCH STATISTICS / HISTORY
 # ============================================================
 #

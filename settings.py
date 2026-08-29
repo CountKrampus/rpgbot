@@ -37,6 +37,9 @@ DEFAULT_SETTINGS = {
     "skip_shiny_encounters": False,
     "auto_stop_on_consecutive_failures": None,
     "log_level": "normal",
+    "search_encounter_timeout_seconds": 20,
+    "ball_selection_delay_ms": 500,
+    "encounter_detection_retry_delay_ms": 500,
 }
 
 
@@ -95,11 +98,14 @@ def gather_current_settings():
         get_search_delay,
         get_auto_stop_consecutive_failures,
         get_log_level,
+        get_search_encounter_timeout,
+        get_encounter_detection_retry_delay,
     )
     from capture import (
         get_preferred_ball_order,
         get_capture_retry_limit,
         get_skip_shiny_encounters,
+        get_ball_selection_delay,
     )
     from menus.training_menu import (
         get_battle_count_setting,
@@ -127,6 +133,9 @@ def gather_current_settings():
         "skip_shiny_encounters": get_skip_shiny_encounters(),
         "auto_stop_on_consecutive_failures": get_auto_stop_consecutive_failures(),
         "log_level": get_log_level(),
+        "search_encounter_timeout_seconds": get_search_encounter_timeout(),
+        "ball_selection_delay_ms": get_ball_selection_delay(),
+        "encounter_detection_retry_delay_ms": get_encounter_detection_retry_delay(),
     }
 
 
@@ -141,11 +150,14 @@ def apply_settings(settings):
         set_search_delay,
         set_auto_stop_consecutive_failures,
         set_log_level,
+        set_search_encounter_timeout,
+        set_encounter_detection_retry_delay,
     )
     from capture import (
         set_preferred_ball_order,
         set_capture_retry_limit,
         set_skip_shiny_encounters,
+        set_ball_selection_delay,
     )
     from menus.training_menu import (
         set_battle_count_setting,
@@ -240,5 +252,26 @@ def apply_settings(settings):
         settings.get(
             "log_level",
             DEFAULT_SETTINGS["log_level"],
+        )
+    )
+
+    set_search_encounter_timeout(
+        settings.get(
+            "search_encounter_timeout_seconds",
+            DEFAULT_SETTINGS["search_encounter_timeout_seconds"],
+        )
+    )
+
+    set_ball_selection_delay(
+        settings.get(
+            "ball_selection_delay_ms",
+            DEFAULT_SETTINGS["ball_selection_delay_ms"],
+        )
+    )
+
+    set_encounter_detection_retry_delay(
+        settings.get(
+            "encounter_detection_retry_delay_ms",
+            DEFAULT_SETTINGS["encounter_detection_retry_delay_ms"],
         )
     )

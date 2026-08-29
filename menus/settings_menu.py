@@ -30,10 +30,18 @@ from search import (
     set_auto_stop_consecutive_failures,
     get_log_level,
     set_log_level,
+    get_search_encounter_timeout,
+    set_search_encounter_timeout,
+    get_encounter_detection_retry_delay,
+    set_encounter_detection_retry_delay,
 )
 from training import (
     get_between_battles_wait,
     set_between_battles_wait,
+)
+from capture import (
+    get_ball_selection_delay,
+    set_ball_selection_delay,
 )
 
 
@@ -242,6 +250,103 @@ def _system_settings():
             print("✗ Invalid choice.")
 
 
+def _advanced_timing_settings():
+
+    print()
+    print("=" * 60)
+    print("ADVANCED SETTINGS — TIMING")
+    print("=" * 60)
+
+    while True:
+
+        print()
+        print(f"Search encounter timeout: {get_search_encounter_timeout()} seconds")
+        print(f"Ball selection delay: {get_ball_selection_delay()} ms")
+        print(f"Encounter detection retry: {get_encounter_detection_retry_delay()} ms")
+        print()
+        print("1. Set search encounter timeout")
+        print("2. Set ball selection delay")
+        print("3. Set encounter detection retry delay")
+        print("4. Back")
+
+        choice = input("\nChoose: ").strip()
+
+        if choice == "1":
+
+            try:
+                seconds = int(
+                    input(
+                        f"Search encounter timeout (seconds)? "
+                        f"(currently {get_search_encounter_timeout()}): "
+                    ).strip()
+                )
+
+                if seconds <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_search_encounter_timeout(seconds):
+                    print(f"✓ Timeout set to {seconds} seconds.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "2":
+
+            try:
+                ms = int(
+                    input(
+                        f"Ball selection delay (milliseconds)? "
+                        f"(currently {get_ball_selection_delay()}): "
+                    ).strip()
+                )
+
+                if ms <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_ball_selection_delay(ms):
+                    print(f"✓ Ball selection delay set to {ms} ms.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "3":
+
+            try:
+                ms = int(
+                    input(
+                        f"Encounter detection retry delay (milliseconds)? "
+                        f"(currently {get_encounter_detection_retry_delay()}): "
+                    ).strip()
+                )
+
+                if ms <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_encounter_detection_retry_delay(ms):
+                    print(f"✓ Retry delay set to {ms} ms.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "4":
+
+            input("\nPress Enter to return to settings...")
+            return
+
+        else:
+
+            print("✗ Invalid choice.")
+
+
 def _save_settings():
 
     current = settings.gather_current_settings()
@@ -375,10 +480,11 @@ def settings_menu(driver):
         print("3. Capture Settings")
         print("4. Safety Settings")
         print("5. System Settings")
-        print("6. Break Timer Settings")
-        print("7. Save Settings")
-        print("8. Reset Settings")
-        print("9. Back")
+        print("6. Advanced Settings")
+        print("7. Break Timer Settings")
+        print("8. Save Settings")
+        print("9. Reset Settings")
+        print("10. Back")
 
         choice = input("\nChoose: ").strip()
 
@@ -398,15 +504,18 @@ def settings_menu(driver):
             _system_settings()
 
         elif choice == "6":
-            _break_settings()
+            _advanced_timing_settings()
 
         elif choice == "7":
-            _save_settings()
+            _break_settings()
 
         elif choice == "8":
-            _reset_settings()
+            _save_settings()
 
         elif choice == "9":
+            _reset_settings()
+
+        elif choice == "10":
             return
 
         else:

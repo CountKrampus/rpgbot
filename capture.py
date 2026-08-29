@@ -97,6 +97,29 @@ def set_skip_shiny_encounters(skip):
 
 
 # ============================================================
+# TIMING SETTINGS (Phase 3)
+# ============================================================
+
+_ball_selection_delay = 500  # milliseconds
+
+
+def get_ball_selection_delay():
+    """Return delay after ball click before attack (milliseconds)."""
+    return _ball_selection_delay
+
+
+def set_ball_selection_delay(milliseconds):
+    """Set delay after ball click before attack."""
+    global _ball_selection_delay
+    
+    if milliseconds <= 0:
+        return False
+    
+    _ball_selection_delay = int(milliseconds)
+    return True
+
+
+# ============================================================
 # CAPTURE STATISTICS
 # ============================================================
 #
@@ -544,7 +567,10 @@ def select_best_ball(driver):
 
                             # Wait for JavaScript handler to complete
                             # (item_choice() is async)
-                            time.sleep(0.5)
+                            # Use configurable delay
+                            time.sleep(
+                                _ball_selection_delay / 1000.0
+                            )
 
                             _record_ball_used(
                                 selected
