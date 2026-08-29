@@ -40,6 +40,9 @@ DEFAULT_SETTINGS = {
     "search_encounter_timeout_seconds": 20,
     "ball_selection_delay_ms": 500,
     "encounter_detection_retry_delay_ms": 500,
+    "mine_result_poll_interval_ms": 150,
+    "mining_encounter_auto_catch": True,
+    "auto_stop_mining_on_area_cleared": True,
 }
 
 
@@ -107,6 +110,11 @@ def gather_current_settings():
         get_skip_shiny_encounters,
         get_ball_selection_delay,
     )
+    from mining import (
+        get_mine_result_poll_interval,
+        get_mining_encounter_auto_catch,
+        get_auto_stop_mining_on_area_cleared,
+    )
     from menus.training_menu import (
         get_battle_count_setting,
         get_difficulty_setting,
@@ -136,6 +144,9 @@ def gather_current_settings():
         "search_encounter_timeout_seconds": get_search_encounter_timeout(),
         "ball_selection_delay_ms": get_ball_selection_delay(),
         "encounter_detection_retry_delay_ms": get_encounter_detection_retry_delay(),
+        "mine_result_poll_interval_ms": get_mine_result_poll_interval(),
+        "mining_encounter_auto_catch": get_mining_encounter_auto_catch(),
+        "auto_stop_mining_on_area_cleared": get_auto_stop_mining_on_area_cleared(),
     }
 
 
@@ -158,6 +169,11 @@ def apply_settings(settings):
         set_capture_retry_limit,
         set_skip_shiny_encounters,
         set_ball_selection_delay,
+    )
+    from mining import (
+        set_mine_result_poll_interval,
+        set_mining_encounter_auto_catch,
+        set_auto_stop_mining_on_area_cleared,
     )
     from menus.training_menu import (
         set_battle_count_setting,
@@ -273,5 +289,26 @@ def apply_settings(settings):
         settings.get(
             "encounter_detection_retry_delay_ms",
             DEFAULT_SETTINGS["encounter_detection_retry_delay_ms"],
+        )
+    )
+
+    set_mine_result_poll_interval(
+        settings.get(
+            "mine_result_poll_interval_ms",
+            DEFAULT_SETTINGS["mine_result_poll_interval_ms"],
+        )
+    )
+
+    set_mining_encounter_auto_catch(
+        settings.get(
+            "mining_encounter_auto_catch",
+            DEFAULT_SETTINGS["mining_encounter_auto_catch"],
+        )
+    )
+
+    set_auto_stop_mining_on_area_cleared(
+        settings.get(
+            "auto_stop_mining_on_area_cleared",
+            DEFAULT_SETTINGS["auto_stop_mining_on_area_cleared"],
         )
     )

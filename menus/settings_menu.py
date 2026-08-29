@@ -43,6 +43,14 @@ from capture import (
     get_ball_selection_delay,
     set_ball_selection_delay,
 )
+from mining import (
+    get_mine_result_poll_interval,
+    set_mine_result_poll_interval,
+    get_mining_encounter_auto_catch,
+    set_mining_encounter_auto_catch,
+    get_auto_stop_mining_on_area_cleared,
+    set_auto_stop_mining_on_area_cleared,
+)
 
 
 def _capture_settings():
@@ -347,6 +355,75 @@ def _advanced_timing_settings():
             print("✗ Invalid choice.")
 
 
+def _mining_settings():
+
+    print()
+    print("=" * 60)
+    print("MINING SETTINGS")
+    print("=" * 60)
+
+    while True:
+
+        print()
+        print(f"Poll interval: {get_mine_result_poll_interval()} ms")
+        print(f"Auto-catch encounters: {'YES' if get_mining_encounter_auto_catch() else 'NO'}")
+        print(f"Auto-stop on area cleared: {'YES' if get_auto_stop_mining_on_area_cleared() else 'NO'}")
+        print()
+        print("1. Set poll interval")
+        print("2. Toggle auto-catch encounters")
+        print("3. Toggle auto-stop on area cleared")
+        print("4. Back")
+
+        choice = input("\nChoose: ").strip()
+
+        if choice == "1":
+
+            try:
+                ms = int(
+                    input(
+                        f"Poll interval (milliseconds)? "
+                        f"(currently {get_mine_result_poll_interval()}): "
+                    ).strip()
+                )
+
+                if ms <= 0:
+                    print("✗ Must be a positive number.")
+                    continue
+
+                if set_mine_result_poll_interval(ms):
+                    print(f"✓ Poll interval set to {ms} ms.")
+                else:
+                    print("✗ Invalid value.")
+
+            except ValueError:
+                print("✗ Invalid number.")
+
+        elif choice == "2":
+
+            current = get_mining_encounter_auto_catch()
+            new_state = not current
+            set_mining_encounter_auto_catch(new_state)
+            status = "YES (catch them)" if new_state else "NO (ignore them)"
+            print(f"✓ Auto-catch encounters: {status}")
+
+        elif choice == "3":
+
+            current = get_auto_stop_mining_on_area_cleared()
+            new_state = not current
+            set_auto_stop_mining_on_area_cleared(new_state)
+            status = "YES (stop)" if new_state else "NO (continue)"
+            print(f"✓ Auto-stop on area cleared: {status}")
+
+        elif choice == "4":
+
+            input("\nPress Enter to return to settings...")
+            return
+
+        else:
+
+            print("✗ Invalid choice.")
+
+
 def _save_settings():
 
     current = settings.gather_current_settings()
@@ -481,10 +558,11 @@ def settings_menu(driver):
         print("4. Safety Settings")
         print("5. System Settings")
         print("6. Advanced Settings")
-        print("7. Break Timer Settings")
-        print("8. Save Settings")
-        print("9. Reset Settings")
-        print("10. Back")
+        print("7. Mining Settings")
+        print("8. Break Timer Settings")
+        print("9. Save Settings")
+        print("10. Reset Settings")
+        print("11. Back")
 
         choice = input("\nChoose: ").strip()
 
@@ -507,15 +585,18 @@ def settings_menu(driver):
             _advanced_timing_settings()
 
         elif choice == "7":
-            _break_settings()
+            _mining_settings()
 
         elif choice == "8":
-            _save_settings()
+            _break_settings()
 
         elif choice == "9":
-            _reset_settings()
+            _save_settings()
 
         elif choice == "10":
+            _reset_settings()
+
+        elif choice == "11":
             return
 
         else:

@@ -37,6 +37,55 @@ MINE_RESULT_WAIT = min(
 
 
 # ============================================================
+# MINING SETTINGS (Phase 3)
+# ============================================================
+
+_mine_result_poll_interval = 150  # milliseconds
+_mining_encounter_auto_catch = True
+_auto_stop_mining_on_area_cleared = True
+
+
+def get_mine_result_poll_interval():
+    """Return polling interval for mining results (milliseconds)."""
+    return _mine_result_poll_interval
+
+
+def set_mine_result_poll_interval(milliseconds):
+    """Set polling interval for mining results."""
+    global _mine_result_poll_interval
+    
+    if milliseconds <= 0:
+        return False
+    
+    _mine_result_poll_interval = int(milliseconds)
+    return True
+
+
+def get_mining_encounter_auto_catch():
+    """Return whether to auto-catch encountered Pokémon while mining."""
+    return _mining_encounter_auto_catch
+
+
+def set_mining_encounter_auto_catch(auto_catch):
+    """Set whether to auto-catch encountered Pokémon."""
+    global _mining_encounter_auto_catch
+    _mining_encounter_auto_catch = bool(auto_catch)
+    return True
+
+
+def get_auto_stop_mining_on_area_cleared():
+    """Return whether to stop mining when area is cleared."""
+    return _auto_stop_mining_on_area_cleared
+
+
+def set_auto_stop_mining_on_area_cleared(auto_stop):
+    """Set whether to stop mining when area is cleared."""
+    global _auto_stop_mining_on_area_cleared
+    _auto_stop_mining_on_area_cleared = bool(auto_stop)
+    return True
+
+
+# ============================================================
 # SESSION STATISTICS
 # ============================================================
 
