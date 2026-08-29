@@ -157,71 +157,137 @@ def _training_settings():
     print("=" * 60)
     print("TRAINING SETTINGS")
     print("=" * 60)
-    print()
-    print(f"Battles per session: {_battle_count_setting}")
 
-    difficulty_label = (
-        DIFFICULTY_LABELS.get(_difficulty_setting, _difficulty_setting)
-        if _difficulty_setting
-        else "(site default - unchanged)"
-    )
+    while True:
 
-    print(f"Battle difficulty: {difficulty_label}")
+        min_wait, max_wait = training_get_between_battles_wait()
 
-    answer = input(
-        "\nNew battles-per-session value (blank to keep current): "
-    ).strip()
+        print()
+        print(f"Battles per session: {_battle_count_setting}")
 
-    if answer:
+        difficulty_label = (
+            DIFFICULTY_LABELS.get(_difficulty_setting, _difficulty_setting)
+            if _difficulty_setting
+            else "(site default - unchanged)"
+        )
 
-        try:
-            value = int(answer)
+        print(f"Battle difficulty: {difficulty_label}")
+        print(f"Wait between battles: {min_wait:.2f} - {max_wait:.2f} seconds")
+        print()
+        print("1. Set battles-per-session")
+        print("2. Set battle difficulty")
+        print("3. Set wait between battles")
+        print("4. Back")
 
-        except ValueError:
-            print("✗ Invalid number - battles-per-session unchanged.")
-            value = None
+        choice = input("\nChoose: ").strip()
 
-        if value is not None:
+        if choice == "1":
 
-            if value <= 0:
-                print("✗ Must be a positive number - unchanged.")
-            else:
-                _battle_count_setting = value
-                print(f"✓ Battles per session set to {value}.")
+            answer = input(
+                f"New battles-per-session value "
+                f"(currently {_battle_count_setting}): "
+            ).strip()
 
-    print()
-    print("Battle difficulty options:")
-    print("  0. Don't change (site default)")
+            if answer:
 
-    for i, value in enumerate(DIFFICULTY_VALUES, 1):
-        print(f"  {i}. {DIFFICULTY_LABELS[value]}")
+                try:
 
-    difficulty_choice = input(
-        "\nChoose a number (blank to keep current): "
-    ).strip()
+                    value = int(answer)
 
-    if difficulty_choice:
+                except ValueError:
 
-        try:
-            index = int(difficulty_choice)
+                    print("✗ Invalid number - unchanged.")
+                    continue
 
-        except ValueError:
-            print("✗ Invalid choice - difficulty unchanged.")
-            index = None
+                if value <= 0:
+                    print("✗ Must be a positive number - unchanged.")
+                else:
+                    _battle_count_setting = value
+                    print(f"✓ Battles per session set to {value}.")
 
-        if index == 0:
-            _difficulty_setting = None
-            print("✓ Difficulty set to site default.")
+        elif choice == "2":
 
-        elif index is not None and 1 <= index <= len(DIFFICULTY_VALUES):
-            _difficulty_setting = DIFFICULTY_VALUES[index - 1]
-            print(
-                f"✓ Difficulty set to "
-                f"{DIFFICULTY_LABELS[_difficulty_setting]}."
-            )
+            print()
+            print("Battle difficulty options:")
+            print("  0. Don't change (site default)")
 
-        elif index is not None:
-            print("✗ Invalid choice - difficulty unchanged.")
+            for i, value in enumerate(DIFFICULTY_VALUES, 1):
+                print(f"  {i}. {DIFFICULTY_LABELS[value]}")
+
+            difficulty_choice = input(
+                "\nChoose a number (blank to keep current): "
+            ).strip()
+
+            if difficulty_choice:
+
+                try:
+
+                    index = int(difficulty_choice)
+
+                except ValueError:
+
+                    print("✗ Invalid choice - difficulty unchanged.")
+                    continue
+
+                if index == 0:
+                    _difficulty_setting = None
+                    print("✓ Difficulty set to site default.")
+
+                elif 1 <= index <= len(DIFFICULTY_VALUES):
+                    _difficulty_setting = DIFFICULTY_VALUES[index - 1]
+                    print(
+                        f"✓ Difficulty set to "
+                        f"{DIFFICULTY_LABELS[_difficulty_setting]}."
+                    )
+
+                else:
+                    print("✗ Invalid choice - difficulty unchanged.")
+
+        elif choice == "3":
+
+            try:
+
+                min_input = float(
+                    input(
+                        f"Min wait seconds "
+                        f"(currently {min_wait:.2f}): "
+                    ).strip()
+                )
+
+                max_input = float(
+                    input(
+                        f"Max wait seconds "
+                        f"(currently {max_wait:.2f}): "
+                    ).strip()
+                )
+
+                if min_input <= 0 or max_input <= 0:
+                    print("✗ Values must be positive.")
+                    continue
+
+                if min_input > max_input:
+                    min_input, max_input = max_input, min_input
+
+                if training_set_between_battles_wait(min_input, max_input):
+                    print(
+                        f"✓ Wait between battles set to "
+                        f"{min_input:.2f} - {max_input:.2f} seconds."
+                    )
+                else:
+                    print("✗ Invalid values.")
+
+            except ValueError:
+
+                print("✗ Invalid number.")
+
+        elif choice == "4":
+
+            input("\nPress Enter to return to training menu...")
+            return
+
+        else:
+
+            print("✗ Invalid choice.")
 
 
 def _training_status():
