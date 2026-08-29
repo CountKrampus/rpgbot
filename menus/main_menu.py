@@ -19,6 +19,7 @@ from menus.messages_menu import messages_menu
 from menus.training_menu import training_menu
 from menus.shop_menu import shop_menu
 from menus.settings_menu import settings_menu
+from account import account_menu
 
 
 BANNER = r"""
@@ -98,7 +99,7 @@ def main_menu(driver):
             _not_yet_implemented("Pokemon")
 
         elif choice == "8":
-            _not_yet_implemented("Account")
+            account_menu(driver)
 
         elif choice == "9":
             _not_yet_implemented("Utilities")
