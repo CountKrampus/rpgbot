@@ -372,6 +372,11 @@ def _clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
 
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI color codes from text for accurate length calculation."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+
 def _get_soup(driver) -> BeautifulSoup:
     try:
         return BeautifulSoup(driver.page_source, "html.parser")
