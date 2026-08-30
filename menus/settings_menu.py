@@ -56,8 +56,6 @@ from mining import (
 from utils import (
     get_browser_timeout,
     set_browser_timeout,
-    get_max_connection_retries,
-    set_max_connection_retries,
     get_slow_network_mode,
     set_slow_network_mode,
     get_session_time_limit,
