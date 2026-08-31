@@ -1,0 +1,28 @@
+when battle result says : "Your {Insert Pokemon's Name} fainted!
+Go to the Pokemon Center or switch Pokemon!
+
+go to pokemon center
+
+<a href="/pokemon_center">Pokemon Center</a>
+
+<td class="tnav" align="center" width="100%">
+Your SilverUndeadGastly used <b>Awakened Psychokinesis</b>! <font color="darkgreen"><b>67670</b></font> damage! (31%)
+    <br>It was super effective!
+    <br>Foe SilverUndeadGastly used <b>Scare</b>! <font color="darkred"><b>100643</b></font> damage! (30%)<br>It was super effective!
+  <br>
+  <br><img src="/images/pokemon/SilverUndeadGastly.png?94969" alt="Silver Undead Gastly"><br>Your SilverUndeadGastly fainted!<br>Go to the <a href="/pokemon_center">Pokemon Center</a> or switch Pokemon!
+</td>
+
+Heal:
+
+<input type="button" id="PC_HealPokemon" value="Heal Party Pokémon" class="inputsubmit" onclick="if (!window.__cfRLUnblockHandlers) return false; this.disabled= true; this.value='Loading...'; heal_pokemon();">
+
+and resume training
+
+
+style login.py like the rest of the menus (============================================================
+LOGIN
+============================================================
+✓ Already logged in.)
+
+Allow more the one instance of the broswer/bot to run?

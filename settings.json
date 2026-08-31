@@ -1,0 +1,14 @@
+{
+  "search_delay_min": 1.5,
+  "search_delay_max": 2.5,
+  "preferred_ball_order": [
+    "Ultra Ball",
+    "Great Ball",
+    "Pokeball"
+  ],
+  "training_battles_per_session": 300,
+  "training_battle_difficulty": null,
+  "break_enabled": true,
+  "break_interval_minutes": 120,
+  "break_duration_minutes": 30
+}

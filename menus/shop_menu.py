@@ -1,36 +1,14 @@
 """
 Shop menu for Eclipse RPG Automation.
 
-Keeps the different shop systems separated:
-
-    Item Shop     - not yet implemented (no real HTML seen yet)
-    Buy Pokemon   - real, via buy_pokemon.py
-
-IMPORTANT ARCHITECTURE NOTE:
-
-Every other module in this bot (search.py, capture.py,
-training.py, messages.py, box.py) drives the site through
-Selenium - the login itself happens in the real browser
-(login.py), and session state lives in the browser's cookies.
-
-buy_pokemon.py was written against `requests` + BeautifulSoup
-instead, which is a different HTTP client with no browser
-session of its own. To make it actually work against the
-logged-in account, this file copies the Selenium driver's
-cookies into a requests.Session before using PokemonShop.
-
-CAVEAT: Eclipse RPG sits behind Cloudflare (visible from the
-Rocket Loader / __cfRLUnblockHandlers script patterns on every
-page). Copying cookies gets a requests.Session the right
-authentication, but Cloudflare can still challenge or block
-plain `requests` traffic based on TLS/JS fingerprinting in ways
-copying cookies doesn't fix. If Buy Pokemon searches start
-failing or returning Cloudflare challenge pages instead of real
-results, that's almost certainly why - the fix at that point
-would be rewriting this module in Selenium like everything
-else, not tweaking the cookie bridge.
+Handles Item Shop placeholder and Buy Pokémon marketplace queries.
 """
 
+import os
+import sys
+import platform
+import time
+import re
 import requests
 
 from buy_pokemon import (
@@ -40,24 +18,51 @@ from buy_pokemon import (
 )
 
 
+# ============================================================
+# ANSI & STYLING
+# ============================================================
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+
+CYAN = "\033[96m"
+BLUE = "\033[94m"
+MAGENTA = "\033[95m"
+PURPLE = "\033[38;5;141m"
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+WHITE = "\033[97m"
+GRAY = "\033[90m"
+GOLD = "\033[38;5;220m"
+
+BORDER_COLOR = PURPLE
+CATEGORY_COLOR = f"{BOLD}{CYAN}"
+KEY_COLOR = f"{BOLD}{YELLOW}"
+NAME_COLOR = f"{BOLD}{WHITE}"
+DESC_COLOR = GRAY
+
+ANSI_STRIP_REGEX = re.compile(r"\x1b\[[0-9;]*[mK]")
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_STRIP_REGEX.sub("", text)
+
+
+def _row(content: str, width: int = 71) -> str:
+    v_len = len(_strip_ansi(content))
+    pad = max(0, width - v_len)
+    return f"{BORDER_COLOR}║{RESET}{content}{' ' * pad}{BORDER_COLOR}║{RESET}"
+
+
 def _build_session_from_driver(driver):
-    """
-    Copy the Selenium driver's current cookies into a fresh
-    requests.Session, so PokemonShop makes authenticated
-    requests as the logged-in account instead of an anonymous
-    session.
-    """
-
     session = requests.Session()
-
     session.headers.update({
-        "User-Agent": driver.execute_script(
-            "return navigator.userAgent;"
-        ),
+        "User-Agent": driver.execute_script("return navigator.userAgent;"),
     })
 
     for cookie in driver.get_cookies():
-
         session.cookies.set(
             cookie.get("name"),
             cookie.get("value"),
@@ -69,42 +74,43 @@ def _build_session_from_driver(driver):
 
 
 def _item_shop():
+    w = 56
+    def _drow(content):
+        vlen = len(_strip_ansi(content))
+        pad = max(0, w - vlen)
+        return f"{BORDER_COLOR}│{RESET}{content}{' ' * pad}{BORDER_COLOR}│{RESET}"
 
     print()
-    print("=" * 60)
-    print("ITEM SHOP")
-    print("=" * 60)
+    print(f"{BORDER_COLOR}╭{'─' * w}╮{RESET}")
+    print(_drow(f"  {YELLOW}✦ FEATURE IN DEVELOPMENT ✦{RESET}"))
+    print(f"{BORDER_COLOR}├{'─' * w}┤{RESET}")
+    print(_drow(f"  Section: {BOLD}{WHITE}Item Shop & Market{RESET}"))
+    print(_drow(""))
+    print(_drow(f"  {GRAY}Item Shop automation has not been implemented yet.{RESET}"))
+    print(_drow(f"  {GRAY}Requires HTML evidence of /item_shop in Ideas.md.{RESET}"))
+    print(f"{BORDER_COLOR}╰{'─' * w}╯{RESET}")
     print()
-    print(
-        "Item Shop isn't implemented yet - no real HTML from "
-        "/item_shop has been provided, so nothing here is built "
-        "on guesses."
-    )
 
-    input("\nPress Enter to return to the shop menu...")
+    input(f"{GRAY}Press Enter to return to the shop menu...{RESET}")
 
 
 def _prompt_pokemon_type():
-
     print()
-    print("Filter by type (optional):")
-    print("  0. All types")
+    print(f"{CATEGORY_COLOR}Filter by Pokémon Variant / Type (optional):{RESET}")
+    print(f"  {KEY_COLOR}[ 0]{RESET} All types")
 
     for i, pokemon_type in enumerate(POKEMON_TYPES, 1):
-        print(f"  {i}. {pokemon_type}")
+        print(f"  {KEY_COLOR}[{i:2d}]{RESET} {pokemon_type}")
 
-    choice = input(
-        "\nChoose a number (blank for all types): "
-    ).strip()
+    choice = input(f"\n{BOLD}{CYAN}❯ Choose variant number {GRAY}[blank for all]{CYAN}:{RESET} ").strip()
 
     if not choice:
         return ""
 
     try:
         index = int(choice)
-
     except ValueError:
-        print("✗ Invalid choice - using all types.")
+        print(f"{YELLOW}⚠ Invalid choice - showing all types.{RESET}")
         return ""
 
     if index == 0:
@@ -113,139 +119,130 @@ def _prompt_pokemon_type():
     if 1 <= index <= len(POKEMON_TYPES):
         return POKEMON_TYPES[index - 1]
 
-    print("✗ Invalid choice - using all types.")
+    print(f"{YELLOW}⚠ Invalid choice - showing all types.{RESET}")
     return ""
 
 
 def _buy_pokemon_menu(driver):
+    w = 60
+    def _drow(content):
+        vlen = len(_strip_ansi(content))
+        pad = max(0, w - vlen)
+        return f"{BORDER_COLOR}│{RESET}{content}{' ' * pad}{BORDER_COLOR}│{RESET}"
 
     print()
-    print("=" * 60)
-    print("BUY POKEMON")
-    print("=" * 60)
+    print(f"{BORDER_COLOR}╭{'─' * w}╮{RESET}")
+    print(_drow(f"  {BOLD}{MAGENTA}🛒  BUY POKÉMON MARKETPLACE{RESET}"))
+    print(f"{BORDER_COLOR}├{'─' * w}┤{RESET}")
+    print(_drow(f"  {GRAY}Search & filter player market listings.{RESET}"))
+    print(f"{BORDER_COLOR}╰{'─' * w}╯{RESET}")
+    print()
 
-    name_filter = input(
-        "\nPokemon name (blank for any): "
-    ).strip()
-
+    name_filter = input(f"{BOLD}{CYAN}❯ Pokémon Name {GRAY}[blank for any]{CYAN}:{RESET} ").strip()
     type_filter = _prompt_pokemon_type()
 
-    print("\nSearching the marketplace...")
+    print(f"\n{CYAN}⚡ Searching the marketplace...{RESET}")
 
     try:
-
         session = _build_session_from_driver(driver)
-
         shop = PokemonShop(session)
-
         listings = shop.search(
             pokemon_name=name_filter,
             pokemon_type=type_filter,
         )
-
     except requests.RequestException as error:
-
-        print(f"✗ Request failed: {error}")
-        print(
-            "  (If this keeps happening, it's likely "
-            "Cloudflare blocking non-browser traffic - see "
-            "the note at the top of this file.)"
-        )
-
-        input("\nPress Enter to return to the shop menu...")
+        print(f"{RED}✗ Request failed: {error}{RESET}")
+        print(f"{GRAY}  (Cloudflare may be challenging requests - see notes in shop_menu.py){RESET}")
+        input(f"\n{GRAY}Press Enter to return to the shop menu...{RESET}")
         return
 
     if not listings:
-
-        print("\nNo listings found.")
-        input("\nPress Enter to return to the shop menu...")
+        print(f"\n{YELLOW}No marketplace listings found matching your search.{RESET}")
+        input(f"\n{GRAY}Press Enter to return to the shop menu...{RESET}")
         return
 
     print()
-
+    print(f"{GOLD}Marketplace Listings ({len(listings)} found):{RESET}\n")
     for index, listing in enumerate(listings, 1):
-        print(f"{index:3}. {format_listing(listing)}")
+        print(f"  {KEY_COLOR}[{index:2d}]{RESET} {WHITE}{format_listing(listing)}{RESET}")
 
-    choice = input(
-        "\nEnter a number to view/buy, or press Enter to go back: "
-    ).strip()
-
+    choice = input(f"\n{BOLD}{CYAN}❯ Enter listing number to inspect/buy {GRAY}[or press Enter to return]{CYAN}:{RESET} ").strip()
     if not choice:
         return
 
     try:
         index = int(choice)
         listing = listings[index - 1]
-
     except (ValueError, IndexError):
-        print("✗ Invalid selection.")
-        input("\nPress Enter to return to the shop menu...")
+        print(f"{RED}✗ Invalid selection.{RESET}")
+        time.sleep(1.0)
         return
+
+    dw = 60
+    def _ddrow(content):
+        vlen = len(_strip_ansi(content))
+        pad = max(0, dw - vlen)
+        return f"{BORDER_COLOR}│{RESET}{content}{' ' * pad}{BORDER_COLOR}│{RESET}"
 
     print()
-    print("=" * 60)
-    print(format_listing(listing))
-    print("=" * 60)
+    print(f"{BORDER_COLOR}╭{'─' * dw}╮{RESET}")
+    print(_ddrow(f"  {BOLD}{MAGENTA}LISTING DETAIL{RESET}"))
+    print(f"{BORDER_COLOR}├{'─' * dw}┤{RESET}")
+    print(_ddrow(f"  {WHITE}{format_listing(listing)}{RESET}"))
+    print(f"{BORDER_COLOR}╰{'─' * dw}╯{RESET}")
 
     if not listing.can_buy:
-
-        print("\nThis listing doesn't have a valid Buy ID.")
-        input("\nPress Enter to return to the shop menu...")
+        print(f"\n{YELLOW}⚠ This listing does not have a valid direct Buy ID.{RESET}")
+        input(f"\n{GRAY}Press Enter to return to the shop menu...{RESET}")
         return
 
-    confirm = input(
-        "\nAttempt to buy this Pokemon? [y/N]: "
-    ).strip().lower()
-
+    confirm = input(f"\n{BOLD}{CYAN}❯ Attempt to buy this Pokémon? [y/N]:{RESET} ").strip().lower()
     if confirm != "y":
-        print("\nCancelled.")
-        input("\nPress Enter to return to the shop menu...")
+        print(f"\n{GRAY}Cancelled.{RESET}")
+        time.sleep(0.8)
         return
 
     try:
-
         shop.buy(listing)
-
-        print("✓ Purchase request sent.")
-
+        print(f"\n{GREEN}✓ Purchase request successfully sent.{RESET}")
     except NotImplementedError:
-
-        print(
-            "✗ Purchasing isn't wired up yet - the site's "
-            "actual purchase request (endpoint/payload) hasn't "
-            "been captured, so this deliberately doesn't guess "
-            "at it rather than risk sending a bad request."
-        )
-
+        print(f"\n{YELLOW}⚠ Direct purchase endpoint payload is not yet wired up.{RESET}")
     except requests.RequestException as error:
+        print(f"\n{RED}✗ Purchase request failed: {error}{RESET}")
 
-        print(f"✗ Purchase request failed: {error}")
-
-    input("\nPress Enter to return to the shop menu...")
+    input(f"\n{GRAY}Press Enter to return to the shop menu...{RESET}")
 
 
 def shop_menu(driver):
+    w = 71
+    top_border = f"{BORDER_COLOR}╔{'═' * w}╗{RESET}"
+    mid_border = f"{BORDER_COLOR}╠{'═' * w}╣{RESET}"
+    bot_border = f"{BORDER_COLOR}╚{'═' * w}╝{RESET}"
+
     while True:
-
         print()
-        print("=" * 60)
-        print("SHOPS")
-        print("=" * 60)
-        print()
-        print("1. Item Shop")
-        print("2. Buy Pokemon")
-        print("3. Back")
+        print(top_border)
+        print(_row(f"  {BOLD}{MAGENTA}🛒  SHOPS & MARKETPLACE{RESET}", w))
+        print(mid_border)
+        print(_row("", w))
+        print(_row(f"    {KEY_COLOR}[ 1]{RESET} {NAME_COLOR}Item Shop{RESET}        {DESC_COLOR}— Poké Balls, potions & stones (WIP){RESET}", w))
+        print(_row(f"    {KEY_COLOR}[ 2]{RESET} {NAME_COLOR}Buy Pokémon{RESET}      {DESC_COLOR}— Search & purchase Pokémon from player market{RESET}", w))
+        print(_row("", w))
+        print(_row(f"    {RED}{BOLD}[ 3]{RESET} {RED}Back{RESET}             {DESC_COLOR}— Return to main menu{RESET}", w))
+        print(_row("", w))
+        print(bot_border)
 
-        choice = input("\nChoose: ").strip()
+        try:
+            choice = input(f"\n{BOLD}{CYAN}❯ Select Option {GRAY}[1-3]{CYAN}:{RESET} ").strip()
+        except (KeyboardInterrupt, EOFError):
+            break
 
         if choice == "1":
             _item_shop()
-
         elif choice == "2":
             _buy_pokemon_menu(driver)
-
         elif choice == "3":
             return
-
         else:
-            print("✗ Invalid choice.")
+            print(f"\n{RED}✗ Invalid choice '{choice}'. Please choose 1-3.{RESET}")
+            time.sleep(1.0)
