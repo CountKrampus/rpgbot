@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-RPGBot Auto-Update Script
-Pulls latest changes from GitHub and restarts the bot.
+RPGBot Auto-Update System
+
+Safe GitHub updater for RPGBot.
+
+The updater protects the local bot when the local version is newer
+than GitHub, and refuses to overwrite uncommitted or diverged work.
 
 Usage:
-    python update.py              # Check, update, and restart
-    python update.py --check      # Check for updates without updating
-    python update.py --no-restart # Update without restarting
-    python update.py --help       # Show help
+    python update.py
+    python update.py --check
+    python update.py --status
+    python update.py --no-restart
+    python update.py --help
 """
 
 import subprocess
@@ -25,8 +30,40 @@ GITHUB_REMOTE = "origin"
 GITHUB_BRANCH = "main"
 
 BOT_SCRIPT = "main.py"
-
 UPDATE_LOG_FILE = ".update_log"
+
+
+# ============================================================
+# WINDOWS CONSOLE SAFETY
+# ============================================================
+
+def setup_console():
+    """
+    Make stdout/stderr safe for Windows consoles.
+
+    Some Windows console environments cannot print Unicode
+    emoji characters. The updater therefore uses plain ASCII
+    status messages.
+    """
+
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(
+                encoding="utf-8",
+                errors="replace"
+            )
+
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(
+                encoding="utf-8",
+                errors="replace"
+            )
+
+    except Exception:
+        pass
+
+
+setup_console()
 
 
 # ============================================================
@@ -35,21 +72,23 @@ UPDATE_LOG_FILE = ".update_log"
 
 def run_git(args, timeout=30):
     """
-    Run a git command and return the completed process.
-
-    args should NOT include the word 'git'.
+    Run a Git command.
     """
 
     return subprocess.run(
         ["git"] + args,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout
     )
 
 
 def is_git_repo():
-    """Check if the current directory is a git repository."""
+    """
+    Check whether the current directory is a Git repository.
+    """
 
     try:
         result = run_git(
@@ -67,15 +106,13 @@ def is_git_repo():
 
 
 def get_current_branch():
-    """Get the current git branch name."""
+    """
+    Return the current Git branch.
+    """
 
     try:
         result = run_git(
-            [
-                "rev-parse",
-                "--abbrev-ref",
-                "HEAD"
-            ],
+            ["rev-parse", "--abbrev-ref", "HEAD"],
             timeout=5
         )
 
@@ -89,7 +126,9 @@ def get_current_branch():
 
 
 def get_current_commit():
-    """Get the current local commit SHA."""
+    """
+    Return the full local commit SHA.
+    """
 
     try:
         result = run_git(
@@ -98,7 +137,7 @@ def get_current_commit():
         )
 
         if result.returncode == 0:
-            return result.stdout.strip()[:7]
+            return result.stdout.strip()
 
     except Exception:
         pass
@@ -106,8 +145,23 @@ def get_current_commit():
     return None
 
 
+def get_current_commit_short():
+    """
+    Return the shortened local commit SHA.
+    """
+
+    commit = get_current_commit()
+
+    if commit:
+        return commit[:7]
+
+    return None
+
+
 def get_latest_commit():
-    """Get the latest commit SHA from origin/main."""
+    """
+    Return the GitHub main commit SHA.
+    """
 
     try:
         result = run_git(
@@ -119,7 +173,7 @@ def get_latest_commit():
         )
 
         if result.returncode == 0:
-            return result.stdout.strip()[:7]
+            return result.stdout.strip()
 
     except Exception:
         pass
@@ -127,18 +181,122 @@ def get_latest_commit():
     return None
 
 
-def has_local_changes():
+def get_latest_commit_short():
     """
-    Check whether the working directory contains
-    uncommitted changes.
+    Return the shortened GitHub commit SHA.
+    """
+
+    commit = get_latest_commit()
+
+    if commit:
+        return commit[:7]
+
+    return None
+
+
+def get_merge_base():
+    """
+    Return the common ancestor between local HEAD and GitHub.
+
+    Returns None when the histories are unrelated.
     """
 
     try:
         result = run_git(
             [
-                "status",
-                "--porcelain"
+                "merge-base",
+                "HEAD",
+                f"{GITHUB_REMOTE}/{GITHUB_BRANCH}"
             ],
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            return result.stdout.strip()
+
+    except Exception:
+        pass
+
+    return None
+
+
+# ============================================================
+# COMMIT RELATIONSHIP
+# ============================================================
+
+def get_commit_relationship():
+    """
+    Determine how the local version relates to GitHub.
+
+    Returns:
+
+        same
+        local_newer
+        github_newer
+        diverged
+        unrelated
+        unknown
+    """
+
+    local = get_current_commit()
+    remote = get_latest_commit()
+
+    if not local or not remote:
+        return "unknown"
+
+    if local == remote:
+        return "same"
+
+    merge_base = get_merge_base()
+
+    # The local repository and GitHub repository have no
+    # common ancestor.
+    if not merge_base:
+        return "unrelated"
+
+    # GitHub is an ancestor of the local version.
+    result = run_git(
+        [
+            "merge-base",
+            "--is-ancestor",
+            f"{GITHUB_REMOTE}/{GITHUB_BRANCH}",
+            "HEAD"
+        ],
+        timeout=10
+    )
+
+    if result.returncode == 0:
+        return "local_newer"
+
+    # Local is an ancestor of GitHub.
+    result = run_git(
+        [
+            "merge-base",
+            "--is-ancestor",
+            "HEAD",
+            f"{GITHUB_REMOTE}/{GITHUB_BRANCH}"
+        ],
+        timeout=10
+    )
+
+    if result.returncode == 0:
+        return "github_newer"
+
+    return "diverged"
+
+
+# ============================================================
+# LOCAL CHANGE DETECTION
+# ============================================================
+
+def has_local_changes():
+    """
+    Check for uncommitted changes.
+    """
+
+    try:
+        result = run_git(
+            ["status", "--porcelain"],
             timeout=10
         )
 
@@ -152,15 +310,161 @@ def has_local_changes():
 
 
 def get_local_changes():
-    """Return a list of local uncommitted changes."""
+    """
+    Return local Git changes.
+    """
 
     try:
         result = run_git(
-            [
-                "status",
-                "--short"
-            ],
+            ["status", "--short"],
             timeout=10
+        )
+
+        if result.returncode == 0:
+            return result.stdout.strip()
+
+    except Exception:
+        pass
+
+    return ""
+
+
+# ============================================================
+# GITHUB FETCH
+# ============================================================
+
+def fetch_github():
+    """
+    Fetch GitHub's main branch.
+
+    This does NOT modify bot files.
+    """
+
+    try:
+
+        print()
+        print("[INFO] Fetching latest version from GitHub...")
+
+        result = run_git(
+            [
+                "fetch",
+                GITHUB_REMOTE,
+                GITHUB_BRANCH
+            ],
+            timeout=60
+        )
+
+        if result.returncode != 0:
+
+            print()
+            print("[ERROR] GitHub fetch failed.")
+
+            error = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or "Unknown Git error."
+            )
+
+            print()
+            print(f"Error: {error}")
+
+            return False
+
+        print("[OK] GitHub connection successful")
+
+        return True
+
+    except subprocess.TimeoutExpired:
+
+        print()
+        print("[ERROR] GitHub fetch timed out.")
+
+        return False
+
+    except Exception as e:
+
+        print()
+        print("[ERROR] Error contacting GitHub:")
+        print(f"        {type(e).__name__}: {e}")
+
+        return False
+
+
+# ============================================================
+# STATUS SUMMARY
+# ============================================================
+
+def print_status_summary(relationship):
+    """
+    Display the relationship between local and GitHub.
+    """
+
+    print()
+
+    if relationship == "same":
+
+        print("[OK] LOCAL AND GITHUB ARE THE SAME")
+        print()
+        print("Your bot is already synchronized with GitHub.")
+
+    elif relationship == "local_newer":
+
+        print("[LOCAL NEWER]")
+        print()
+        print("Your local bot contains newer commits than GitHub.")
+        print()
+        print("Your local version will NOT be overwritten.")
+
+    elif relationship == "github_newer":
+
+        print("[UPDATE AVAILABLE]")
+        print()
+        print("GitHub contains commits that your local version does not.")
+
+    elif relationship == "diverged":
+
+        print("[WARNING] LOCAL AND GITHUB HAVE DIVERGED")
+        print()
+        print("Both versions contain unique changes.")
+        print()
+        print("The updater will NOT automatically overwrite either version.")
+
+    elif relationship == "unrelated":
+
+        print("[PROTECTED] LOCAL AND GITHUB HAVE UNRELATED HISTORIES")
+        print()
+        print("Your local bot was initialized separately from GitHub.")
+        print()
+        print("Your local version remains protected.")
+        print()
+        print("The older GitHub version will NOT overwrite it.")
+
+    else:
+
+        print("[ERROR] VERSION RELATIONSHIP UNKNOWN")
+        print()
+        print("Git could not determine how the versions relate.")
+
+
+# ============================================================
+# FILE DIFFERENCES
+# ============================================================
+
+def get_file_difference():
+    """
+    Show informational differences between local HEAD and GitHub.
+    """
+
+    try:
+
+        result = run_git(
+            [
+                "diff",
+                "--stat",
+                "HEAD",
+                f"{GITHUB_REMOTE}/{GITHUB_BRANCH}"
+            ],
+            timeout=15
         )
 
         if result.returncode == 0:
@@ -178,13 +482,10 @@ def get_local_changes():
 
 def check_for_updates():
     """
-    Check whether origin/main contains commits that
-    are not currently installed locally.
+    Check for a safe GitHub update.
 
-    Returns:
-
-        True  = update available
-        False = no update / check failed
+    Returns True only when GitHub is newer and the update
+    relationship can be safely handled.
     """
 
     print()
@@ -193,154 +494,146 @@ def check_for_updates():
     print("=" * 60)
 
     # --------------------------------------------------------
-    # Verify git repository.
+    # Git repository
     # --------------------------------------------------------
 
     if not is_git_repo():
 
         print()
-        print("❌ Not a git repository!")
-
-        print(
-            "This directory is not a git repository."
-        )
-
-        print()
-        print("To set up the bot with git:")
-
-        print(
-            "  git clone "
-            "https://github.com/CountKrampus/rpgbot.git"
-        )
+        print("[ERROR] This directory is not a Git repository.")
 
         return False
 
     # --------------------------------------------------------
-    # Fetch GitHub.
+    # Fetch
     # --------------------------------------------------------
 
-    try:
+    if not fetch_github():
+        return False
+
+    # --------------------------------------------------------
+    # Commits
+    # --------------------------------------------------------
+
+    current = get_current_commit()
+    latest = get_latest_commit()
+
+    if current is None:
 
         print()
-        print(
-            "📡 Fetching latest version from GitHub..."
-        )
+        print("[ERROR] Could not determine local Git version.")
 
-        fetch_result = run_git(
-            [
-                "fetch",
-                GITHUB_REMOTE,
-                GITHUB_BRANCH
-            ],
-            timeout=30
-        )
+        return False
 
-        if fetch_result.returncode != 0:
-
-            print()
-            print("❌ Check failed")
-
-            error = (
-                fetch_result.stderr.strip()
-                or fetch_result.stdout.strip()
-                or "Unknown Git error."
-            )
-
-            print()
-            print(f"Error: {error}")
-
-            return False
-
-        print("✅ GitHub connection successful")
-
-        # ----------------------------------------------------
-        # Get versions.
-        # ----------------------------------------------------
-
-        current = get_current_commit()
-        latest = get_latest_commit()
-
-        if current is None:
-
-            print()
-            print(
-                "❌ Could not determine "
-                "current local version."
-            )
-
-            return False
-
-        if latest is None:
-
-            print()
-            print(
-                "❌ Could not determine "
-                "latest GitHub version."
-            )
-
-            return False
+    if latest is None:
 
         print()
-        print(
-            f"Current version: {current}"
-        )
+        print("[ERROR] Could not determine GitHub version.")
 
-        print(
-            f"Latest version:  {latest}"
-        )
+        return False
 
-        # ----------------------------------------------------
-        # Determine whether local HEAD differs from
-        # origin/main.
-        #
-        # IMPORTANT:
-        #
-        # Do NOT reuse the result from rev-parse.
-        # git diff --quiet returns:
-        #
-        #   0 = identical
-        #   1 = different
-        # ----------------------------------------------------
+    print()
+    print(f"Local commit:  {current[:7]}")
+    print(f"GitHub commit: {latest[:7]}")
 
-        diff_result = run_git(
-            [
-                "diff",
-                "--quiet",
-                "HEAD",
-                f"{GITHUB_REMOTE}/{GITHUB_BRANCH}"
-            ],
-            timeout=10
-        )
+    # --------------------------------------------------------
+    # Local changes
+    # --------------------------------------------------------
 
-        # ----------------------------------------------------
-        # No differences.
-        # ----------------------------------------------------
+    local_changes = has_local_changes()
 
-        if diff_result.returncode == 0:
+    if local_changes:
+
+        print()
+        print("[WARNING] Local uncommitted changes detected.")
+
+        changes = get_local_changes()
+
+        if changes:
 
             print()
-            print(
-                "✅ You're already up to date!"
-            )
+            print("Local changes:")
 
-            return False
+            for line in changes.splitlines():
+                print(f"  {line}")
 
-        # ----------------------------------------------------
-        # Differences detected.
-        # ----------------------------------------------------
+    # --------------------------------------------------------
+    # Relationship
+    # --------------------------------------------------------
 
-        if diff_result.returncode == 1:
+    relationship = get_commit_relationship()
+
+    print_status_summary(relationship)
+
+    # --------------------------------------------------------
+    # Same
+    # --------------------------------------------------------
+
+    if relationship == "same":
+        return False
+
+    # --------------------------------------------------------
+    # Local newer
+    # --------------------------------------------------------
+
+    if relationship == "local_newer":
+
+        print()
+        print("[PROTECTED] Your local version is newer.")
+        print()
+        print("No update will be performed.")
+
+        return False
+
+    # --------------------------------------------------------
+    # Unrelated
+    # --------------------------------------------------------
+
+    if relationship == "unrelated":
+
+        print()
+        print("[PROTECTED] Local version remains authoritative.")
+        print()
+        print("No automatic update will be performed.")
+
+        return False
+
+    # --------------------------------------------------------
+    # Diverged
+    # --------------------------------------------------------
+
+    if relationship == "diverged":
+
+        print()
+        print("[WARNING] Automatic updating is disabled.")
+        print()
+        print("The local and GitHub versions contain different histories.")
+        print()
+        print("Nothing will be overwritten.")
+
+        diff = get_file_difference()
+
+        if diff:
 
             print()
-            print(
-                "🎉 Update available!"
-            )
+            print("Differences:")
+            print()
+            print(diff)
 
-            # ------------------------------------------------
-            # Show incoming commits.
-            # ------------------------------------------------
+        return False
 
-            log_result = run_git(
+    # --------------------------------------------------------
+    # GitHub newer
+    # --------------------------------------------------------
+
+    if relationship == "github_newer":
+
+        print()
+        print("[UPDATE AVAILABLE]")
+
+        try:
+
+            result = run_git(
                 [
                     "log",
                     "--oneline",
@@ -349,116 +642,50 @@ def check_for_updates():
                 timeout=10
             )
 
-            if (
-                log_result.returncode == 0
-                and log_result.stdout.strip()
-            ):
+            if result.returncode == 0 and result.stdout.strip():
 
                 print()
-                print("New commits:")
+                print("New GitHub commits:")
 
-                for line in (
-                    log_result.stdout
-                    .strip()
-                    .splitlines()
-                ):
+                for line in result.stdout.strip().splitlines():
+                    print(f"  - {line}")
 
-                    print(
-                        f"  • {line}"
-                    )
+        except Exception:
+            pass
 
-            # ------------------------------------------------
-            # Show whether local files have been modified.
-            # ------------------------------------------------
+        if local_changes:
 
-            if has_local_changes():
+            print()
+            print("[WARNING] Local changes detected.")
+            print()
+            print("The updater will NOT overwrite them.")
 
-                print()
-                print(
-                    "⚠️  Local changes detected."
-                )
+        return True
 
-                print()
-                print(
-                    "Your working directory contains "
-                    "uncommitted changes."
-                )
+    # --------------------------------------------------------
+    # Unknown
+    # --------------------------------------------------------
 
-                changes = get_local_changes()
+    print()
+    print("[ERROR] Could not safely determine update status.")
 
-                if changes:
-
-                    print()
-                    print("Local changes:")
-
-                    for line in changes.splitlines():
-
-                        print(
-                            f"  {line}"
-                        )
-
-                print()
-                print(
-                    "The updater will NOT automatically "
-                    "overwrite these changes."
-                )
-
-            return True
-
-        # ----------------------------------------------------
-        # Git itself returned an unexpected result.
-        # ----------------------------------------------------
-
-        print()
-        print("❌ Check failed")
-
-        error = (
-            diff_result.stderr.strip()
-            or diff_result.stdout.strip()
-            or "Git returned an unexpected status."
-        )
-
-        print()
-        print(
-            f"Error: {error}"
-        )
-
-        return False
-
-    except subprocess.TimeoutExpired:
-
-        print()
-        print(
-            "❌ Git operation timed out."
-        )
-
-        print(
-            "Check your internet connection "
-            "or GitHub availability."
-        )
-
-        return False
-
-    except Exception as e:
-
-        print()
-        print(
-            "❌ Error checking for updates:"
-        )
-
-        print(
-            f"   {type(e).__name__}: {e}"
-        )
-
-        return False
+    return False
 
 
 # ============================================================
-# PULL UPDATES
+# SAFE UPDATE
 # ============================================================
 
 def pull_updates():
-    """Pull the latest changes from GitHub."""
+    """
+    Perform a safe fast-forward update.
+
+    This function never uses:
+
+        git reset --hard
+        git checkout -- .
+        git clean -fd
+    """
 
     print()
     print("=" * 60)
@@ -468,26 +695,20 @@ def pull_updates():
     if not is_git_repo():
 
         print()
-        print("❌ Not a git repository!")
+        print("[ERROR] Not a Git repository.")
 
         return False
 
     # --------------------------------------------------------
-    # Protect local changes.
+    # Protect uncommitted changes
     # --------------------------------------------------------
 
     if has_local_changes():
 
         print()
-        print(
-            "⚠️  Local changes detected."
-        )
-
+        print("[BLOCKED] Local changes detected.")
         print()
-        print(
-            "The updater will not overwrite "
-            "uncommitted local changes."
-        )
+        print("The updater will not overwrite your local changes.")
 
         changes = get_local_changes()
 
@@ -497,29 +718,77 @@ def pull_updates():
             print("Changes found:")
 
             for line in changes.splitlines():
-
-                print(
-                    f"  {line}"
-                )
+                print(f"  {line}")
 
         print()
-        print(
-            "Please commit or stash your changes "
-            "before updating."
-        )
+        print("Commit your changes before updating.")
 
         return False
 
     # --------------------------------------------------------
-    # Pull.
+    # Fetch
     # --------------------------------------------------------
 
-    try:
+    if not fetch_github():
+        return False
+
+    # --------------------------------------------------------
+    # Relationship
+    # --------------------------------------------------------
+
+    relationship = get_commit_relationship()
+
+    if relationship == "same":
 
         print()
-        print(
-            "📥 Pulling latest changes..."
-        )
+        print("[OK] Already up to date.")
+
+        return False
+
+    if relationship == "local_newer":
+
+        print()
+        print("[BLOCKED] Local version is newer than GitHub.")
+        print()
+        print("Your local bot will not be overwritten.")
+
+        return False
+
+    if relationship == "unrelated":
+
+        print()
+        print("[BLOCKED] Local and GitHub histories are unrelated.")
+        print()
+        print("Your local bot remains protected.")
+
+        return False
+
+    if relationship == "diverged":
+
+        print()
+        print("[BLOCKED] Local and GitHub histories have diverged.")
+        print()
+        print("Automatic merging is disabled for safety.")
+
+        return False
+
+    if relationship != "github_newer":
+
+        print()
+        print("[ERROR] GitHub cannot be safely applied.")
+
+        return False
+
+    # --------------------------------------------------------
+    # Fast-forward update
+    # --------------------------------------------------------
+
+    print()
+    print("GitHub is newer.")
+    print()
+    print("Performing safe fast-forward update...")
+
+    try:
 
         result = run_git(
             [
@@ -534,36 +803,21 @@ def pull_updates():
         if result.returncode == 0:
 
             print()
-            print(
-                "✅ Update successful!"
-            )
+            print("[OK] Update successful!")
 
             if result.stdout.strip():
 
                 print()
 
-                for line in (
-                    result.stdout
-                    .strip()
-                    .splitlines()
-                ):
+                for line in result.stdout.strip().splitlines():
 
                     if line.strip():
-
-                        print(
-                            f"  {line}"
-                        )
+                        print(f"  {line}")
 
             return True
 
-        # ----------------------------------------------------
-        # Pull failed.
-        # ----------------------------------------------------
-
         print()
-        print(
-            "❌ Update failed!"
-        )
+        print("[ERROR] Update failed.")
 
         error = (
             result.stderr.strip()
@@ -572,86 +826,22 @@ def pull_updates():
         )
 
         print()
-        print(
-            f"Error: {error}"
-        )
-
-        # ----------------------------------------------------
-        # Helpful diagnostics.
-        # ----------------------------------------------------
-
-        lower_error = error.lower()
-
-        if (
-            "non-fast-forward" in lower_error
-            or "divergent" in lower_error
-            or "not possible to fast-forward" in lower_error
-        ):
-
-            print()
-            print(
-                "⚠️  Your local branch has diverged "
-                "from GitHub."
-            )
-
-            print()
-            print(
-                "Your local branch contains commits "
-                "that GitHub does not have."
-            )
-
-            print()
-            print(
-                "The updater will not overwrite them."
-            )
-
-            print()
-            print(
-                "If you intentionally want to discard "
-                "local commits, handle that manually "
-                "before running the updater again."
-            )
-
-        elif (
-            "conflict" in lower_error
-            or "merge" in lower_error
-        ):
-
-            print()
-            print(
-                "⚠️  Git reported a merge/conflict problem."
-            )
-
-            print()
-            print(
-                "Review your repository with:"
-            )
-
-            print(
-                "  git status"
-            )
+        print(f"Error: {error}")
 
         return False
 
     except subprocess.TimeoutExpired:
 
         print()
-        print(
-            "❌ Update timed out."
-        )
+        print("[ERROR] Update timed out.")
 
         return False
 
     except Exception as e:
 
         print()
-        print(
-            "❌ Error during update:"
-        )
-
-        print(
-            f"   {type(e).__name__}: {e}"
-        )
+        print("[ERROR] Error during update:")
+        print(f"        {type(e).__name__}: {e}")
 
         return False
 
@@ -661,7 +851,9 @@ def pull_updates():
 # ============================================================
 
 def restart_bot():
-    """Restart the bot after a successful update."""
+    """
+    Restart main.py using the current Python interpreter.
+    """
 
     print()
     print("=" * 60)
@@ -669,41 +861,97 @@ def restart_bot():
     print("=" * 60)
 
     print()
-    print(
-        "Starting bot..."
-    )
+    print("Starting bot...")
 
     try:
 
         subprocess.run(
-            [
-                sys.executable,
-                BOT_SCRIPT
-            ],
+            [sys.executable, BOT_SCRIPT],
             check=False
         )
 
     except KeyboardInterrupt:
 
         print()
-        print(
-            "⚠️  Bot interrupted by user."
-        )
+        print("[WARNING] Bot interrupted by user.")
 
         sys.exit(0)
 
     except Exception as e:
 
         print()
-        print(
-            "❌ Error starting bot:"
-        )
-
-        print(
-            f"   {type(e).__name__}: {e}"
-        )
+        print("[ERROR] Could not start bot:")
+        print(f"        {type(e).__name__}: {e}")
 
         sys.exit(1)
+
+
+# ============================================================
+# STATUS
+# ============================================================
+
+def show_status():
+    """
+    Display detailed update status.
+    """
+
+    print()
+    print("=" * 60)
+    print("RPGBOT UPDATE STATUS")
+    print("=" * 60)
+
+    if not is_git_repo():
+
+        print()
+        print("[ERROR] Git repository not initialized.")
+
+        return 1
+
+    local = get_current_commit()
+    branch = get_current_branch()
+
+    print()
+    print(f"Local branch:  {branch or 'Unknown'}")
+    print(
+        f"Local commit:  "
+        f"{local[:7] if local else 'Unknown'}"
+    )
+
+    if fetch_github():
+
+        remote = get_latest_commit()
+
+        print(
+            f"GitHub commit: "
+            f"{remote[:7] if remote else 'Unknown'}"
+        )
+
+        relationship = get_commit_relationship()
+
+        print_status_summary(relationship)
+
+    print()
+
+    if has_local_changes():
+
+        print("[WARNING] Working directory has uncommitted changes.")
+
+        changes = get_local_changes()
+
+        if changes:
+
+            print()
+
+            for line in changes.splitlines():
+                print(f"  {line}")
+
+    else:
+
+        print("[OK] Working directory is clean.")
+
+    print()
+
+    return 0
 
 
 # ============================================================
@@ -711,65 +959,70 @@ def restart_bot():
 # ============================================================
 
 def show_help():
-    """Show help information."""
 
     print(__doc__)
 
     print()
-    print("Options:")
-
-    print(
-        "  --check"
-        "       Check for updates without updating"
-    )
-
-    print(
-        "  --help"
-        "        Show this help message"
-    )
-
-    print(
-        "  --no-restart"
-        " Update but don't restart the bot"
-    )
+    print("=" * 60)
+    print("COMMANDS")
+    print("=" * 60)
 
     print()
-    print("Examples:")
+    print("python update.py")
+    print("    Check for updates and safely update.")
 
-    print(
-        "  python update.py"
-    )
+    print()
+    print("python update.py --check")
+    print("    Check for updates only.")
 
-    print(
-        "  python update.py --check"
-    )
+    print()
+    print("python update.py --status")
+    print("    Show Git/update status.")
 
-    print(
-        "  python update.py --no-restart"
-    )
+    print()
+    print("python update.py --no-restart")
+    print("    Update without restarting main.py.")
+
+    print()
+    print("python update.py --help")
+    print("    Show this help.")
+
+    print()
+    print("=" * 60)
+    print("SAFETY")
+    print("=" * 60)
+
+    print()
+    print("The updater will NOT automatically overwrite:")
+
+    print("  - A newer local version")
+    print("  - Uncommitted local changes")
+    print("  - Diverged histories")
+    print("  - Unrelated histories")
+
+    print()
+    print("No 'git reset --hard' is used.")
 
 
 # ============================================================
 # UPDATE LOG
 # ============================================================
 
-def log_update(success):
-    """Log update attempt to .update_log."""
+def log_update(success, relationship=None):
 
     try:
 
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "success": success,
-            "commit": get_current_commit(),
+            "relationship": relationship,
+            "commit": get_current_commit_short(),
             "branch": get_current_branch()
         }
 
         log_data = []
 
-        if os.path.exists(
-            UPDATE_LOG_FILE
-        ):
+        if os.path.exists(UPDATE_LOG_FILE):
 
             try:
 
@@ -781,23 +1034,16 @@ def log_update(success):
 
                     log_data = json.load(f)
 
-                if not isinstance(
-                    log_data,
-                    list
-                ):
-
+                if not isinstance(log_data, list):
                     log_data = []
 
             except Exception:
 
                 log_data = []
 
-        log_data.append(
-            log_entry
-        )
+        log_data.append(log_entry)
 
         # Keep only the last 20 entries.
-
         log_data = log_data[-20:]
 
         with open(
@@ -813,10 +1059,6 @@ def log_update(success):
             )
 
     except Exception:
-
-        # Updating should never fail just because
-        # the update log cannot be written.
-
         pass
 
 
@@ -825,31 +1067,19 @@ def log_update(success):
 # ============================================================
 
 def main():
-    """Main update flow."""
 
-    # --------------------------------------------------------
-    # Parse command-line arguments.
-    # --------------------------------------------------------
-
-    check_only = (
-        "--check"
-        in sys.argv
-    )
+    check_only = "--check" in sys.argv
+    status_only = "--status" in sys.argv
 
     show_help_msg = (
-        "--help"
-        in sys.argv
-        or "-h"
-        in sys.argv
+        "--help" in sys.argv
+        or "-h" in sys.argv
     )
 
-    no_restart = (
-        "--no-restart"
-        in sys.argv
-    )
+    no_restart = "--no-restart" in sys.argv
 
     # --------------------------------------------------------
-    # Help.
+    # Help
     # --------------------------------------------------------
 
     if show_help_msg:
@@ -859,23 +1089,25 @@ def main():
         return 0
 
     # --------------------------------------------------------
-    # Check-only mode.
+    # Status
+    # --------------------------------------------------------
+
+    if status_only:
+
+        return show_status()
+
+    # --------------------------------------------------------
+    # Check only
     # --------------------------------------------------------
 
     if check_only:
 
-        has_updates = (
-            check_for_updates()
-        )
+        has_updates = check_for_updates()
 
-        return (
-            0
-            if not has_updates
-            else 1
-        )
+        return 0 if not has_updates else 1
 
     # --------------------------------------------------------
-    # Normal update mode.
+    # Main updater
     # --------------------------------------------------------
 
     print()
@@ -883,72 +1115,30 @@ def main():
     print("RPGBOT AUTO-UPDATE SYSTEM")
     print("=" * 60)
 
-    # --------------------------------------------------------
-    # Verify repository.
-    # --------------------------------------------------------
-
     if not is_git_repo():
 
         print()
-        print(
-            "❌ Not a git repository!"
-        )
-
-        print()
-        print(
-            "This update script requires Git."
-        )
-
-        print()
-        print(
-            "To set up the bot:"
-        )
-
-        print()
-        print(
-            "  1. Backup your settings.json"
-        )
-
-        print(
-            "  2. Run:"
-        )
-
-        print(
-            "     git clone "
-            "https://github.com/CountKrampus/rpgbot.git"
-        )
-
-        print()
-        print(
-            "  3. Copy your settings.json back"
-        )
-
-        print(
-            "  4. Run:"
-        )
-
-        print(
-            "     python update.py"
-        )
+        print("[ERROR] Git repository not initialized.")
 
         return 1
 
     # --------------------------------------------------------
-    # Check for updates.
+    # Check
     # --------------------------------------------------------
 
-    if not check_for_updates():
+    has_updates = check_for_updates()
+
+    if not has_updates:
 
         print()
-        print(
-            "✅ All done! "
-            "Your bot is up to date."
-        )
+        print("[OK] No safe update available.")
+        print()
+        print("Your local bot has been left untouched.")
 
         return 0
 
     # --------------------------------------------------------
-    # Confirm update.
+    # Ask
     # --------------------------------------------------------
 
     print()
@@ -958,80 +1148,68 @@ def main():
         "Update now? (yes/no): "
     ).strip().lower()
 
-    if response not in [
-        "yes",
-        "y"
-    ]:
+    if response not in ["yes", "y"]:
 
         print()
-        print(
-            "⏭️  Update cancelled."
-        )
+        print("Update cancelled.")
 
         return 0
 
     # --------------------------------------------------------
-    # Pull updates.
+    # Update
     # --------------------------------------------------------
+
+    relationship = get_commit_relationship()
 
     if not pull_updates():
 
         print()
-        print(
-            "❌ Update failed."
-        )
+        print("[ERROR] Update failed or was blocked.")
+        print()
+        print("Bot was NOT restarted.")
 
-        print(
-            "Bot not restarted."
+        log_update(
+            False,
+            relationship
         )
-
-        log_update(False)
 
         return 1
 
     # --------------------------------------------------------
-    # Log successful update.
+    # Log
     # --------------------------------------------------------
 
-    log_update(True)
+    log_update(
+        True,
+        relationship
+    )
 
     # --------------------------------------------------------
-    # Don't restart if requested.
+    # No restart
     # --------------------------------------------------------
 
     if no_restart:
 
         print()
-        print(
-            "✅ Update complete!"
-        )
-
-        print(
-            "Bot will start on next run."
-        )
-
+        print("[OK] Update complete!")
         print()
-        print(
-            f"Run: python {BOT_SCRIPT}"
-        )
+        print("Bot will start on the next run.")
+        print()
+        print(f"Run: python {BOT_SCRIPT}")
 
         return 0
 
     # --------------------------------------------------------
-    # Restart.
+    # Restart
     # --------------------------------------------------------
 
     print()
     print("=" * 60)
-    print(
-        "UPDATE COMPLETE!"
-    )
+    print("UPDATE COMPLETE!")
     print("=" * 60)
 
     print()
-    print(
-        "Starting updated bot..."
-    )
+    print("Starting updated bot...")
 
     restart_bot()
 
@@ -1046,28 +1224,19 @@ if __name__ == "__main__":
 
     try:
 
-        sys.exit(
-            main()
-        )
+        sys.exit(main())
 
     except KeyboardInterrupt:
 
         print()
-        print(
-            "⚠️  Update interrupted by user."
-        )
+        print("[WARNING] Update interrupted by user.")
 
         sys.exit(1)
 
     except Exception as e:
 
         print()
-        print(
-            "❌ Unexpected error:"
-        )
-
-        print(
-            f"   {type(e).__name__}: {e}"
-        )
+        print("[ERROR] Unexpected error:")
+        print(f"        {type(e).__name__}: {e}")
 
         sys.exit(1)
