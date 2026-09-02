@@ -1,5 +1,5 @@
 from account import account_selector, get_saved_password
-from browser import setup_driver, close_driver
+from browser import BrowserManager, release_instance_lock
 from login import login
 from menus.main_menu import main_menu
 import settings
@@ -34,7 +34,7 @@ def main():
         # Each account gets its own persistent Brave profile
         # and account lock, allowing different accounts to run
         # simultaneously without profile conflicts.
-        driver = setup_driver(account)
+        driver = BrowserManager.create(account)
 
         if not login(
             driver,
@@ -73,7 +73,7 @@ def main():
         if driver is not None:
 
             try:
-                close_driver(
+                BrowserManager.close(
                     driver,
                     account,
                 )
@@ -83,12 +83,10 @@ def main():
 
         elif account is not None:
 
-            # If setup_driver() acquired the lock but failed
+            # If create() acquired the lock but failed
             # before returning a driver, make sure the lock
             # is cleaned up.
             try:
-                from browser import release_instance_lock
-
                 release_instance_lock(
                     account
                 )

@@ -700,30 +700,6 @@ def is_instance_active(instance=None):
 
 
 # ============================================================
-# DRIVER HEALTH
-# ============================================================
-
-def is_driver_alive(driver):
-    """
-    Check whether the Selenium Brave session is responding.
-    """
-
-    if driver is None:
-
-        return False
-
-    try:
-
-        _ = driver.current_url
-
-        return True
-
-    except Exception:
-
-        return False
-
-
-# ============================================================
 # CREATE BRAVE DRIVER
 # ============================================================
 
@@ -811,274 +787,300 @@ def _create_driver(
 
 
 # ============================================================
-# SETUP DRIVER
+# BROWSER MANAGER
 # ============================================================
 
-def setup_driver(instance=None):
-    """
-    Start an independent persistent Brave instance.
+class BrowserManager:
+    """Windows Brave Selenium lifecycle. Eclipse modules receive a driver."""
 
-    Example:
+    @classmethod
+    def is_alive(cls, driver):
+        """
+        Check whether the Selenium Brave session is responding.
+        """
 
-        driver = setup_driver("goldisduck")
+        if driver is None:
 
-    Every account receives its own persistent profile and
-    cross-process lock.
-    """
+            return False
 
-    instance_name = sanitize_instance_name(
-        instance
-    )
+        try:
 
-    # --------------------------------------------------------
-    # ACQUIRE ACCOUNT LOCK BEFORE STARTING BRAVE
-    # --------------------------------------------------------
+            _ = driver.current_url
 
-    acquire_instance_lock(
-        instance_name
-    )
+            return True
 
-    profile_path = get_profile_path(
-        instance_name
-    )
+        except Exception:
 
-    try:
+            return False
 
-        brave_path = find_brave()
+    @classmethod
+    def create(cls, instance=None):
+        """
+        Start an independent persistent Brave instance.
 
-    except Exception:
+        Example:
+
+            driver = setup_driver("goldisduck")
+
+        Every account receives its own persistent profile and
+        cross-process lock.
+        """
+
+        instance_name = sanitize_instance_name(
+            instance
+        )
+
+        # --------------------------------------------------------
+        # ACQUIRE ACCOUNT LOCK BEFORE STARTING BRAVE
+        # --------------------------------------------------------
+
+        acquire_instance_lock(
+            instance_name
+        )
+
+        profile_path = get_profile_path(
+            instance_name
+        )
+
+        try:
+
+            brave_path = find_brave()
+
+        except Exception:
+
+            release_instance_lock(
+                instance_name
+            )
+
+            raise
+
+        _print_header(
+            "BROWSER STARTUP",
+            f"Initializing Brave for account: {instance_name}",
+        )
+
+        _status(
+            "ENGINE",
+            "Brave Browser",
+            GOLD,
+        )
+
+        _status(
+            "ACCOUNT",
+            instance_name,
+            WHITE,
+        )
+
+        _status(
+            "PROFILE",
+            str(profile_path),
+            CYAN,
+        )
+
+        _status(
+            "STATUS",
+            "Starting browser instance...",
+            CYAN,
+        )
+
+        last_error = None
+
+        # --------------------------------------------------------
+        # STARTUP RETRIES
+        # --------------------------------------------------------
+
+        for attempt in range(
+            1,
+            STARTUP_RETRIES + 1,
+        ):
+
+            driver = None
+
+            try:
+
+                _info(
+                    f"Startup attempt "
+                    f"{attempt}/{STARTUP_RETRIES}"
+                )
+
+                driver = _create_driver(
+                    profile_path,
+                    brave_path,
+                )
+
+                time.sleep(
+                    1
+                )
+
+                if not is_driver_alive(
+                    driver
+                ):
+
+                    raise WebDriverException(
+                        "Brave started but the Selenium "
+                        "session is not responding."
+                    )
+
+                _success(
+                    f"Brave instance '{instance_name}' "
+                    f"is running."
+                )
+
+                print()
+
+                return driver
+
+            except Exception as error:
+
+                last_error = error
+
+                _error(
+                    f"Startup attempt {attempt} failed."
+                )
+
+                print(
+                    f"  {GRAY}{error}{RESET}"
+                )
+
+                if driver is not None:
+
+                    try:
+
+                        driver.quit()
+
+                    except Exception:
+
+                        pass
+
+                if attempt < STARTUP_RETRIES:
+
+                    _warning(
+                        f"Retrying in "
+                        f"{RETRY_DELAY} seconds..."
+                    )
+
+                    time.sleep(
+                        RETRY_DELAY
+                    )
+
+        # --------------------------------------------------------
+        # STARTUP FAILED
+        # --------------------------------------------------------
 
         release_instance_lock(
             instance_name
         )
 
-        raise
-
-    _print_header(
-        "BROWSER STARTUP",
-        f"Initializing Brave for account: {instance_name}",
-    )
-
-    _status(
-        "ENGINE",
-        "Brave Browser",
-        GOLD,
-    )
-
-    _status(
-        "ACCOUNT",
-        instance_name,
-        WHITE,
-    )
-
-    _status(
-        "PROFILE",
-        str(profile_path),
-        CYAN,
-    )
-
-    _status(
-        "STATUS",
-        "Starting browser instance...",
-        CYAN,
-    )
-
-    last_error = None
-
-    # --------------------------------------------------------
-    # STARTUP RETRIES
-    # --------------------------------------------------------
-
-    for attempt in range(
-        1,
-        STARTUP_RETRIES + 1,
-    ):
-
-        driver = None
-
-        try:
-
-            _info(
-                f"Startup attempt "
-                f"{attempt}/{STARTUP_RETRIES}"
-            )
-
-            driver = _create_driver(
-                profile_path,
-                brave_path,
-            )
-
-            time.sleep(
-                1
-            )
-
-            if not is_driver_alive(
-                driver
-            ):
-
-                raise WebDriverException(
-                    "Brave started but the Selenium "
-                    "session is not responding."
-                )
-
-            _success(
-                f"Brave instance '{instance_name}' "
-                f"is running."
-            )
-
-            print()
-
-            return driver
-
-        except Exception as error:
-
-            last_error = error
-
-            _error(
-                f"Startup attempt {attempt} failed."
-            )
-
-            print(
-                f"  {GRAY}{error}{RESET}"
-            )
-
-            if driver is not None:
-
-                try:
-
-                    driver.quit()
-
-                except Exception:
-
-                    pass
-
-            if attempt < STARTUP_RETRIES:
-
-                _warning(
-                    f"Retrying in "
-                    f"{RETRY_DELAY} seconds..."
-                )
-
-                time.sleep(
-                    RETRY_DELAY
-                )
-
-    # --------------------------------------------------------
-    # STARTUP FAILED
-    # --------------------------------------------------------
-
-    release_instance_lock(
-        instance_name
-    )
-
-    raise RuntimeError(
-        f"Unable to start Brave for account "
-        f"'{instance_name}'.\n"
-        f"Profile: {profile_path}\n"
-        f"Last error: {last_error}"
-    )
-
-
-# ============================================================
-# CLOSE DRIVER
-# ============================================================
-
-def close_driver(
-    driver,
-    instance=None,
-):
-    """
-    Safely close Brave and release the account lock.
-    """
-
-    instance_name = sanitize_instance_name(
-        instance
-    )
-
-    _section(
-        "BROWSER SHUTDOWN"
-    )
-
-    _status(
-        "ACCOUNT",
-        instance_name,
-        WHITE,
-    )
-
-    if driver is not None:
-
-        _status(
-            "STATUS",
-            "Closing Brave session...",
-            CYAN,
+        raise RuntimeError(
+            f"Unable to start Brave for account "
+            f"'{instance_name}'.\n"
+            f"Profile: {profile_path}\n"
+            f"Last error: {last_error}"
         )
 
-        try:
+    @classmethod
+    def close(cls, driver, instance=None):
+        """
+        Safely close Brave and release the account lock.
+        """
 
-            driver.quit()
+        instance_name = sanitize_instance_name(
+            instance
+        )
 
-            _success(
-                "Brave session closed."
+        _section(
+            "BROWSER SHUTDOWN"
+        )
+
+        _status(
+            "ACCOUNT",
+            instance_name,
+            WHITE,
+        )
+
+        if driver is not None:
+
+            _status(
+                "STATUS",
+                "Closing Brave session...",
+                CYAN,
             )
 
-        except Exception:
+            try:
 
-            _warning(
-                "Brave session was already closed."
-            )
+                driver.quit()
 
-    release_instance_lock(
-        instance_name
-    )
+                _success(
+                    "Brave session closed."
+                )
+
+            except Exception:
+
+                _warning(
+                    "Brave session was already closed."
+                )
+
+        release_instance_lock(
+            instance_name
+        )
+
+    @classmethod
+    def restart(cls, driver, instance=None):
+        """
+        Restart Brave for an account.
+
+        The persistent profile is preserved.
+
+        The caller should perform the application's login
+        procedure again if the website session was lost.
+        """
+
+        instance_name = sanitize_instance_name(
+            instance
+        )
+
+        _section(
+            "BROWSER RECOVERY"
+        )
+
+        _warning(
+            f"Restarting Brave instance '{instance_name}'..."
+        )
+
+        cls.close(
+            driver,
+            instance_name,
+        )
+
+        time.sleep(
+            1
+        )
+
+        new_driver = cls.create(
+            instance_name
+        )
+
+        _success(
+            "Browser recovery completed."
+        )
+
+        return new_driver
 
 
-# ============================================================
-# RESTART DRIVER
-# ============================================================
+def is_driver_alive(driver):
+    return BrowserManager.is_alive(driver)
 
-def restart_driver(
-    driver,
-    instance=None,
-):
-    """
-    Restart Brave for an account.
 
-    The persistent profile is preserved.
+def setup_driver(instance=None):
+    return BrowserManager.create(instance)
 
-    The caller should perform the application's login
-    procedure again if the website session was lost.
-    """
 
-    instance_name = sanitize_instance_name(
-        instance
-    )
+def close_driver(driver, instance=None):
+    return BrowserManager.close(driver, instance)
 
-    _section(
-        "BROWSER RECOVERY"
-    )
 
-    _warning(
-        f"Restarting Brave instance '{instance_name}'..."
-    )
-
-    close_driver(
-        driver,
-        instance_name,
-    )
-
-    time.sleep(
-        1
-    )
-
-    new_driver = setup_driver(
-        instance_name
-    )
-
-    _success(
-        "Browser recovery completed."
-    )
-
-    return new_driver
+def restart_driver(driver, instance=None):
+    return BrowserManager.restart(driver, instance)
 
 
 # ============================================================
