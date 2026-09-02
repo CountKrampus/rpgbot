@@ -1,0 +1,69 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+.venv/
+venv/
+env/
+ENV/
+
+# Selenium / Chrome / Brave profiles
+chrome_profile/
+selenium_chrome_profile/
+selenium_profiles/
+
+# Browser cache / temporary data
+Cache/
+Cache_Data/
+Code Cache/
+GPUCache/
+DawnCache/
+ShaderCache/
+GrShaderCache/
+Service Worker/
+Session Storage/
+Local Storage/
+IndexedDB/
+blob_storage/
+WebStorage/
+
+# Debug / temporary files
+debug_pages/
+*.log
+*.tmp
+*.temp
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups
+backup/
+
+# Local copies
+local copy/
+
+# Local configuration
+.env
+.env.*
+*.local
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+settings.json
+rare_debug.html
+test.txt
+Gastly_Collection.txt
