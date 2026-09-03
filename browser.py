@@ -79,6 +79,42 @@ BRAVE_PATHS = [
     ),
 ]
 
+# ============================================================
+# CHROME LOCATIONS
+# ============================================================
+
+CHROME_PATHS = [
+    Path(
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    ),
+    Path(
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+    ),
+    Path(
+        os.path.expanduser(
+            r"~\AppData\Local\Google\Chrome\Application\chrome.exe"
+        )
+    ),
+]
+
+# ============================================================
+# CHROMIUM LOCATIONS
+# ============================================================
+
+CHROMIUM_PATHS = [
+    Path(
+        r"C:\Program Files\Chromium\Application\chromium.exe"
+    ),
+    Path(
+        r"C:\Program Files (x86)\Chromium\Application\chromium.exe"
+    ),
+    Path(
+        os.path.expanduser(
+            r"~\AppData\Local\Chromium\Application\chromium.exe"
+        )
+    ),
+]
+
 
 # ============================================================
 # ACTIVE INSTANCES IN THIS PROCESS
@@ -290,6 +326,91 @@ def find_brave():
             for path in BRAVE_PATHS
         )
     )
+
+
+def find_chrome():
+    """
+    Locate Google Chrome on Windows.
+    """
+
+    for path in CHROME_PATHS:
+
+        if path.is_file():
+
+            return path
+
+    raise FileNotFoundError(
+        "Google Chrome could not be found.\n"
+        "Checked:\n"
+        + "\n".join(
+            f"  {path}"
+            for path in CHROME_PATHS
+        )
+    )
+
+
+def find_chromium():
+    """
+    Locate Chromium on Windows.
+    """
+
+    for path in CHROMIUM_PATHS:
+
+        if path.is_file():
+
+            return path
+
+    raise FileNotFoundError(
+        "Chromium could not be found.\n"
+        "Checked:\n"
+        + "\n".join(
+            f"  {path}"
+            for path in CHROMIUM_PATHS
+        )
+    )
+
+
+def find_browser(browser_name="brave"):
+    """
+    Find browser executable by name.
+    
+    Supports: brave, chrome, chromium, auto
+    """
+    
+    browser_name = str(browser_name).lower().strip()
+    
+    if browser_name == "brave":
+        return find_brave()
+    elif browser_name == "chrome":
+        return find_chrome()
+    elif browser_name == "chromium":
+        return find_chromium()
+    elif browser_name == "auto":
+        # Auto-detect: try in order
+        try:
+            return find_brave()
+        except FileNotFoundError:
+            pass
+        
+        try:
+            return find_chrome()
+        except FileNotFoundError:
+            pass
+        
+        try:
+            return find_chromium()
+        except FileNotFoundError:
+            pass
+        
+        raise FileNotFoundError(
+            "No supported browser found.\n"
+            "Checked: Brave, Chrome, Chromium"
+        )
+    else:
+        raise ValueError(
+            f"Unknown browser: {browser_name}\n"
+            "Supported: brave, chrome, chromium, auto"
+        )
 
 
 # ============================================================
@@ -700,25 +821,29 @@ def is_instance_active(instance=None):
 
 
 # ============================================================
-# CREATE BRAVE DRIVER
+# CREATE CHROMIUM-BASED DRIVER
 # ============================================================
 
 def _create_driver(
     profile_path,
-    brave_path,
+    browser_path,
+    browser_name="brave",
 ):
     """
-    Create a Brave Selenium instance.
+    Create a Chromium-based browser Selenium instance.
+    
+    Works with: Brave, Chrome, Chromium
+    (All use the same Chrome WebDriver)
     """
 
     options = Options()
 
     # --------------------------------------------------------
-    # BRAVE EXECUTABLE
+    # BROWSER EXECUTABLE
     # --------------------------------------------------------
 
     options.binary_location = str(
-        brave_path
+        browser_path
     )
 
     # --------------------------------------------------------
@@ -796,7 +921,7 @@ class BrowserManager:
     @classmethod
     def is_alive(cls, driver):
         """
-        Check whether the Selenium Brave session is responding.
+        Check whether the Selenium browser session is responding.
         """
 
         if driver is None:
@@ -814,13 +939,18 @@ class BrowserManager:
             return False
 
     @classmethod
-    def create(cls, instance=None):
+    def create(cls, instance=None, browser="auto"):
         """
-        Start an independent persistent Brave instance.
+        Start an independent persistent browser instance.
+
+        Supports: brave, chrome, chromium, auto
 
         Example:
 
-            driver = setup_driver("goldisduck")
+            driver = BrowserManager.create("goldisduck", browser="brave")
+            driver = BrowserManager.create("goldisduck", browser="chrome")
+            driver = BrowserManager.create("goldisduck", browser="chromium")
+            driver = BrowserManager.create("goldisduck", browser="auto")
 
         Every account receives its own persistent profile and
         cross-process lock.
@@ -829,9 +959,11 @@ class BrowserManager:
         instance_name = sanitize_instance_name(
             instance
         )
+        
+        browser_name = str(browser).lower().strip()
 
         # --------------------------------------------------------
-        # ACQUIRE ACCOUNT LOCK BEFORE STARTING BRAVE
+        # ACQUIRE ACCOUNT LOCK BEFORE STARTING BROWSER
         # --------------------------------------------------------
 
         acquire_instance_lock(
@@ -844,7 +976,9 @@ class BrowserManager:
 
         try:
 
-            brave_path = find_brave()
+            browser_path = find_browser(
+                browser_name
+            )
 
         except Exception:
 
@@ -854,14 +988,17 @@ class BrowserManager:
 
             raise
 
+        # Determine display name for browser
+        display_name = browser_name.title() if browser_name != "auto" else "Auto-detected Browser"
+
         _print_header(
             "BROWSER STARTUP",
-            f"Initializing Brave for account: {instance_name}",
+            f"Initializing {display_name} for account: {instance_name}",
         )
 
         _status(
             "ENGINE",
-            "Brave Browser",
+            display_name,
             GOLD,
         )
 
@@ -905,7 +1042,8 @@ class BrowserManager:
 
                 driver = _create_driver(
                     profile_path,
-                    brave_path,
+                    browser_path,
+                    browser_name,
                 )
 
                 time.sleep(
@@ -917,12 +1055,12 @@ class BrowserManager:
                 ):
 
                     raise WebDriverException(
-                        "Brave started but the Selenium "
+                        f"{display_name} started but the Selenium "
                         "session is not responding."
                     )
 
                 _success(
-                    f"Brave instance '{instance_name}' "
+                    f"{display_name} instance '{instance_name}' "
                     f"is running."
                 )
 
@@ -1002,7 +1140,7 @@ class BrowserManager:
 
             _status(
                 "STATUS",
-                "Closing Brave session...",
+                "Closing browser session...",
                 CYAN,
             )
 
@@ -1011,13 +1149,13 @@ class BrowserManager:
                 driver.quit()
 
                 _success(
-                    "Brave session closed."
+                    "Browser session closed."
                 )
 
             except Exception:
 
                 _warning(
-                    "Brave session was already closed."
+                    "Browser session was already closed."
                 )
 
         release_instance_lock(
@@ -1027,7 +1165,7 @@ class BrowserManager:
     @classmethod
     def restart(cls, driver, instance=None):
         """
-        Restart Brave for an account.
+        Restart the browser for an account.
 
         The persistent profile is preserved.
 
@@ -1044,7 +1182,7 @@ class BrowserManager:
         )
 
         _warning(
-            f"Restarting Brave instance '{instance_name}'..."
+            f"Restarting browser instance '{instance_name}'..."
         )
 
         cls.close(
@@ -1071,8 +1209,13 @@ def is_driver_alive(driver):
     return BrowserManager.is_alive(driver)
 
 
-def setup_driver(instance=None):
-    return BrowserManager.create(instance)
+def setup_driver(instance=None, browser="auto"):
+    """
+    Create a browser driver instance.
+    
+    Supports: brave, chrome, chromium, auto
+    """
+    return BrowserManager.create(instance, browser)
 
 
 def close_driver(driver, instance=None):
@@ -1092,7 +1235,7 @@ def wait_for_browser(
     timeout=10,
 ):
     """
-    Wait for Brave to become responsive.
+    Wait for the browser to become responsive.
 
     Returns:
         True when the browser responds.
