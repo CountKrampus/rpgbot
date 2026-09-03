@@ -49,15 +49,23 @@ DEFAULT_SETTINGS = {
     "session_time_limit_minutes": None,
     "auto_logout_after_session": False,
     "notify_on_shiny_encounter": True,
-       # ================================================================
-        # AUTO-UPDATE SETTINGS (Option 3)
-        # ================================================================
-        "auto_update_enabled": False,
-        "auto_update_check_frequency_hours": 24,
-        "auto_update_restart_after": True,
-        "auto_update_quiet_mode": False,
-        "auto_update_last_check": None,
-        "auto_update_notify": True,
+    
+    # ================================================================
+    # BROWSER SETTINGS
+    # ================================================================
+    "browser_name": "auto",
+    "browser_platform": "auto",
+    "browser_mode": "launch",
+    
+    # ================================================================
+    # AUTO-UPDATE SETTINGS (Option 3)
+    # ================================================================
+    "auto_update_enabled": False,
+    "auto_update_check_frequency_hours": 24,
+    "auto_update_restart_after": True,
+    "auto_update_quiet_mode": False,
+    "auto_update_last_check": None,
+    "auto_update_notify": True,
 }
 
 

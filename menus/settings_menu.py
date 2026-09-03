@@ -1927,6 +1927,432 @@ def _advanced_submenu():
 
 
 # ============================================================
+# BROWSER SETTINGS
+# ============================================================
+
+def _browser_settings():
+    """
+    Browser selection and configuration.
+    """
+
+    while True:
+
+        browser_name = settings.load_settings().get(
+            "browser_name",
+            "auto",
+        )
+
+        browser_platform = settings.load_settings().get(
+            "browser_platform",
+            "auto",
+        )
+
+        browser_mode = settings.load_settings().get(
+            "browser_mode",
+            "launch",
+        )
+
+        _title(
+            "BROWSER SETTINGS",
+            "Configure browser selection and behavior",
+        )
+
+        _status(
+            "Browser",
+            browser_name.title(),
+            CYAN,
+        )
+
+        _status(
+            "Platform",
+            browser_platform.title(),
+            CYAN,
+        )
+
+        _status(
+            "Mode",
+            browser_mode.title(),
+            CYAN,
+        )
+
+        _section(
+            "OPTIONS"
+        )
+
+        _option(
+            "1",
+            "Select Browser",
+            f"currently: {browser_name}",
+        )
+
+        _option(
+            "2",
+            "Select Platform",
+            f"currently: {browser_platform}",
+        )
+
+        _option(
+            "3",
+            "Select Mode",
+            f"currently: {browser_mode}",
+        )
+
+        _option(
+            "4",
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        if choice == "1":
+
+            _browser_selection()
+
+        elif choice == "2":
+
+            _platform_selection()
+
+        elif choice == "3":
+
+            _mode_selection()
+
+        elif choice == "4":
+
+            return
+
+        else:
+
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+
+
+def _browser_selection():
+    """
+    Select which browser to use.
+    """
+
+    while True:
+
+        _title(
+            "SELECT BROWSER",
+            "Choose which browser to use",
+        )
+
+        current = settings.load_settings().get(
+            "browser_name",
+            "auto",
+        )
+
+        _status(
+            "Current",
+            current.title(),
+            CYAN,
+        )
+
+        _section(
+            "AVAILABLE BROWSERS"
+        )
+
+        _option(
+            "1",
+            "Brave",
+            "Use Brave Browser",
+        )
+
+        _option(
+            "2",
+            "Chrome",
+            "Use Google Chrome",
+        )
+
+        _option(
+            "3",
+            "Chromium",
+            "Use Chromium",
+        )
+
+        _option(
+            "4",
+            "Auto Detect",
+            "Tries: Brave → Chrome → Chromium",
+        )
+
+        _option(
+            "5",
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        if choice == "1":
+
+            _update_browser_setting("brave")
+
+            print(
+                f"{GREEN}✓ Browser set to Brave.{RESET}"
+            )
+
+            break
+
+        elif choice == "2":
+
+            _update_browser_setting("chrome")
+
+            print(
+                f"{GREEN}✓ Browser set to Chrome.{RESET}"
+            )
+
+            break
+
+        elif choice == "3":
+
+            _update_browser_setting("chromium")
+
+            print(
+                f"{GREEN}✓ Browser set to Chromium.{RESET}"
+            )
+
+            break
+
+        elif choice == "4":
+
+            _update_browser_setting("auto")
+
+            print(
+                f"{GREEN}✓ Browser set to Auto Detect.{RESET}"
+            )
+
+            break
+
+        elif choice == "5":
+
+            return
+
+        else:
+
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+
+
+def _platform_selection():
+    """
+    Select which platform to use.
+    """
+
+    while True:
+
+        _title(
+            "SELECT PLATFORM",
+            "Choose which platform to use",
+        )
+
+        current = settings.load_settings().get(
+            "browser_platform",
+            "auto",
+        )
+
+        _status(
+            "Current",
+            current.title(),
+            CYAN,
+        )
+
+        _section(
+            "AVAILABLE PLATFORMS"
+        )
+
+        _option(
+            "1",
+            "Windows",
+            "Use Windows-specific browser",
+        )
+
+        _option(
+            "2",
+            "Android / Termux",
+            "Use Android with Termux",
+        )
+
+        _option(
+            "3",
+            "Auto Detect",
+            "Automatically detect platform",
+        )
+
+        _option(
+            "4",
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        if choice == "1":
+
+            _update_platform_setting("windows")
+
+            print(
+                f"{GREEN}✓ Platform set to Windows.{RESET}"
+            )
+
+            break
+
+        elif choice == "2":
+
+            _update_platform_setting("android")
+
+            print(
+                f"{GREEN}✓ Platform set to Android/Termux.{RESET}"
+            )
+
+            break
+
+        elif choice == "3":
+
+            _update_platform_setting("auto")
+
+            print(
+                f"{GREEN}✓ Platform set to Auto Detect.{RESET}"
+            )
+
+            break
+
+        elif choice == "4":
+
+            return
+
+        else:
+
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+
+
+def _mode_selection():
+    """
+    Select how to connect to the browser.
+    """
+
+    while True:
+
+        _title(
+            "SELECT CONNECTION MODE",
+            "Choose how to connect to browser",
+        )
+
+        current = settings.load_settings().get(
+            "browser_mode",
+            "launch",
+        )
+
+        _status(
+            "Current",
+            current.title(),
+            CYAN,
+        )
+
+        _section(
+            "CONNECTION MODES"
+        )
+
+        _option(
+            "1",
+            "Launch Browser",
+            "Start browser instance for this bot",
+        )
+
+        _option(
+            "2",
+            "Attach to Existing",
+            "Connect to running browser",
+        )
+
+        _option(
+            "3",
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        if choice == "1":
+
+            _update_mode_setting("launch")
+
+            print(
+                f"{GREEN}✓ Mode set to Launch Browser.{RESET}"
+            )
+
+            break
+
+        elif choice == "2":
+
+            _update_mode_setting("attach")
+
+            print(
+                f"{GREEN}✓ Mode set to Attach to Existing.{RESET}"
+            )
+
+            break
+
+        elif choice == "3":
+
+            return
+
+        else:
+
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+
+
+def _update_browser_setting(value):
+    """
+    Update browser setting in settings.json.
+    """
+
+    s = settings.load_settings()
+    s["browser_name"] = value
+    settings.save_settings(s)
+
+
+def _update_platform_setting(value):
+    """
+    Update platform setting in settings.json.
+    """
+
+    s = settings.load_settings()
+    s["browser_platform"] = value
+    settings.save_settings(s)
+
+
+def _update_mode_setting(value):
+    """
+    Update mode setting in settings.json.
+    """
+
+    s = settings.load_settings()
+    s["browser_mode"] = value
+    settings.save_settings(s)
+
+
+# ============================================================
 # MAIN SETTINGS MENU
 # ============================================================
 
@@ -1992,23 +2418,35 @@ def settings_menu(driver):
         _blank_row()
 
         _section(
-            "PERSISTENCE"
+            "BROWSER"
         )
 
         _option(
             "9",
+            "Browser Settings",
+            "select browser and platform",
+        )
+
+        _blank_row()
+
+        _section(
+            "PERSISTENCE"
+        )
+
+        _option(
+            "10",
             "Save Settings",
             "save current configuration",
         )
 
         _option(
-            "10",
+            "11",
             "Reset Settings",
             "restore defaults",
         )
 
         _option(
-            "11",
+            "12",
             "Back",
         )
 
@@ -2052,13 +2490,17 @@ def settings_menu(driver):
 
         elif choice == "9":
 
-            _save_settings()
+            _browser_settings()
 
         elif choice == "10":
 
-            _reset_settings()
+            _save_settings()
 
         elif choice == "11":
+
+            _reset_settings()
+
+        elif choice == "12":
 
             return
 
