@@ -374,7 +374,7 @@ def find_browser(browser_name="brave"):
     """
     Find browser executable by name.
     
-    Supports: brave, chrome, chromium, auto, android-cdp, termux
+    Supports: brave, chrome, chromium, auto, android-cdp, android-brave, termux
     """
     
     browser_name = str(browser_name).lower().strip()
@@ -388,6 +388,9 @@ def find_browser(browser_name="brave"):
     elif browser_name == "android-cdp":
         # CDP remote debugging on Android device
         return "android-cdp"
+    elif browser_name == "android-brave":
+        # Brave on Android via CDP
+        return "android-brave"
     elif browser_name == "termux":
         # Termux Chromium
         try:
@@ -422,7 +425,7 @@ def find_browser(browser_name="brave"):
     else:
         raise ValueError(
             f"Unknown browser: {browser_name}\n"
-            "Supported: brave, chrome, chromium, auto, android-cdp, termux"
+            "Supported: brave, chrome, chromium, auto, android-cdp, android-brave, termux"
         )
 
 
@@ -978,6 +981,10 @@ class BrowserManager:
         if browser_name == "android-cdp":
             return cls._create_android_cdp_driver(instance_name)
         
+        # Handle Android Brave
+        if browser_name == "android-brave":
+            return cls._create_android_brave_driver(instance_name)
+        
         # Handle Termux Chromium
         if browser_name == "termux":
             return cls._create_termux_driver(instance_name)
@@ -1124,6 +1131,75 @@ class BrowserManager:
             f"Profile: {profile_path}\n"
             f"Last error: {last_error}"
         )
+
+    @classmethod
+    def _create_android_brave_driver(cls, instance_name):
+        """Create driver for Brave on Android via CDP."""
+        
+        _print_header(
+            "ANDROID BRAVE CONNECTION",
+            f"Connecting to Brave on Android device: {instance_name}",
+        )
+        
+        _status(
+            "MODE",
+            "Brave CDP Remote Debugging",
+            GOLD,
+        )
+        
+        try:
+            from android_brave import AndroidBraveManager
+            
+            # Check if Brave is installed
+            _status(
+                "CHECK",
+                "Verifying Brave installation...",
+                CYAN,
+            )
+            
+            if not AndroidBraveManager.is_brave_installed():
+                _warning("Brave not detected, attempting to start anyway")
+            else:
+                _success("Brave detected on device")
+            
+            # Setup CDP forwarding
+            _status(
+                "SETUP",
+                "Starting Brave in debug mode...",
+                CYAN,
+            )
+            
+            result = AndroidBraveManager.setup_brave_cdp_forwarding()
+            
+            if not result["success"]:
+                _error(f"Brave setup failed: {result['error']}")
+                raise Exception(result['error'])
+            
+            _success(f"Brave CDP ready: {result['url']}")
+            
+            # Create CDP driver
+            _status(
+                "CONNECTION",
+                "Connecting to Brave...",
+                CYAN,
+            )
+            
+            driver_result = AndroidBraveManager.create_brave_cdp_driver(
+                result['url']
+            )
+            
+            if not driver_result["success"]:
+                _error(f"Driver creation failed: {driver_result['error']}")
+                raise Exception(driver_result['error'])
+            
+            _success("Connected to Brave on Android")
+            print()
+            
+            return driver_result["driver"]
+        
+        except ImportError:
+            _error("Android Brave module not available")
+            raise
 
     @classmethod
     def _create_android_cdp_driver(cls, instance_name):
