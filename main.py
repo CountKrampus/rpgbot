@@ -12,6 +12,10 @@ def main():
 
     try:
 
+        settings.apply_settings(
+            settings.load_settings()
+        )
+
         account = account_selector()
 
         if not account:
@@ -47,10 +51,6 @@ def main():
             )
 
             return
-
-        settings.apply_settings(
-            settings.load_settings()
-        )
 
         initialize_break_timer()
 

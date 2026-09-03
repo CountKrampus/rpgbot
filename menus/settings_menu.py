@@ -79,6 +79,15 @@ from utils import (
     set_notify_on_shiny_encounter,
 )
 
+from browser import (
+    BROWSER_LABELS,
+    detect_installed_browsers,
+    get_browser_allow_fallback,
+    get_browser_name,
+    set_browser_allow_fallback,
+    set_browser_name,
+)
+
 
 # ============================================================
 # CONSOLE INITIALIZATION
@@ -1868,10 +1877,182 @@ def _reset_settings():
 
 
 # ============================================================
+# BROWSER SETTINGS
+# ============================================================
+
+def _browser_settings(driver=None):
+
+    while True:
+
+        current_name = get_browser_name()
+        fallback = get_browser_allow_fallback()
+        installed = detect_installed_browsers()
+
+        detected = (
+            ", ".join(
+                BROWSER_LABELS[name]
+                for name in ("brave", "chrome", "chromium")
+                if name in installed
+            )
+            or "none"
+        )
+
+        _title(
+            "BROWSER SETTINGS",
+            "Configure browser automation",
+        )
+
+        _setting(
+            "Browser",
+            BROWSER_LABELS.get(
+                current_name,
+                current_name,
+            ),
+        )
+
+        _setting(
+            "Fallback",
+            "Enabled" if fallback else "Disabled",
+        )
+
+        _setting(
+            "Detected",
+            detected,
+        )
+
+        _blank_row()
+
+        _option(
+            "1",
+            "Select Browser",
+        )
+
+        _option(
+            "2",
+            "Toggle Browser Fallback",
+        )
+
+        _option(
+            "3",
+            "Test Browser",
+        )
+
+        _option(
+            "4",
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        if choice == "1":
+
+            _title(
+                "SELECT BROWSER",
+                "Windows launch browser",
+            )
+
+            _option(
+                "1",
+                "Brave",
+            )
+
+            _option(
+                "2",
+                "Chrome",
+            )
+
+            _option(
+                "3",
+                "Chromium",
+            )
+
+            _option(
+                "4",
+                "Auto Detect",
+            )
+
+            _option(
+                "5",
+                "Back",
+            )
+
+            _close_box()
+
+            browser_choice = input(
+                f"\n{KEY_COLOR}Choose:{RESET} "
+            ).strip()
+
+            mapping = {
+                "1": "brave",
+                "2": "chrome",
+                "3": "chromium",
+                "4": "auto",
+            }
+
+            if browser_choice in mapping:
+
+                selected = mapping[browser_choice]
+                set_browser_name(selected)
+                print(
+                    f"{GREEN}✓ Browser set to "
+                    f"{BROWSER_LABELS[selected]}.{RESET}"
+                )
+
+            elif browser_choice == "5":
+
+                continue
+
+            else:
+
+                print(
+                    f"{RED}✗ Invalid choice.{RESET}"
+                )
+
+        elif choice == "2":
+
+            new_state = not get_browser_allow_fallback()
+            set_browser_allow_fallback(new_state)
+            status = (
+                "Enabled"
+                if new_state
+                else "Disabled"
+            )
+            print(
+                f"{GREEN}✓ Browser fallback: "
+                f"{status}.{RESET}"
+            )
+
+        elif choice == "3":
+
+            from browser import BrowserManager
+
+            BrowserManager.test(
+                driver
+            )
+            _pause(
+                "Press Enter to return to browser settings..."
+            )
+
+        elif choice == "4":
+
+            return
+
+        else:
+
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+
+
+# ============================================================
 # ADVANCED SUBMENU
 # ============================================================
 
-def _advanced_submenu():
+def _advanced_submenu(driver=None):
     """
     Submenu for Advanced Settings with Timing
     and Network options.
@@ -1898,6 +2079,12 @@ def _advanced_submenu():
 
         _option(
             "3",
+            "Browser Settings",
+            "Brave, Chrome, Chromium, Auto Detect",
+        )
+
+        _option(
+            "4",
             "Back",
         )
 
@@ -1916,6 +2103,10 @@ def _advanced_submenu():
             _advanced_network_settings()
 
         elif choice == "3":
+
+            _browser_settings(driver)
+
+        elif choice == "4":
 
             return
 
@@ -2044,7 +2235,7 @@ def settings_menu(driver):
 
         elif choice == "7":
 
-            _advanced_submenu()
+            _advanced_submenu(driver)
 
         elif choice == "8":
 

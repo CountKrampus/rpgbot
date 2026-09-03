@@ -2,12 +2,18 @@ from pathlib import Path
 import json
 import os
 import re
+import shutil
+import sys
 import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import WebDriverException
 
+from config import WAIT_MEDIUM
 from helpers import wait_for_document_ready
 
 
@@ -78,6 +84,46 @@ BRAVE_PATHS = [
         r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe"
     ),
 ]
+
+SUPPORTED_BROWSERS = (
+    "brave",
+    "chrome",
+    "chromium",
+)
+
+AUTO_DETECT_ORDER = (
+    "brave",
+    "chrome",
+    "chromium",
+)
+
+BROWSER_LABELS = {
+    "auto": "Auto Detect",
+    "brave": "Brave Browser",
+    "chrome": "Google Chrome",
+    "chromium": "Chromium",
+}
+
+BROWSER_WHICH_NAMES = {
+    "brave": (
+        "brave.exe",
+        "brave",
+        "brave-browser",
+    ),
+    "chrome": (
+        "chrome.exe",
+        "chrome",
+        "google-chrome",
+    ),
+    "chromium": (
+        "chromium.exe",
+        "chromium",
+        "chromium-browser",
+    ),
+}
+
+_browser_name = "auto"
+_browser_allow_fallback = False
 
 
 # ============================================================
@@ -268,26 +314,259 @@ def _section(title: str):
 
 
 # ============================================================
-# BRAVE PATH
+# BROWSER SETTINGS
 # ============================================================
+
+def get_browser_name():
+    return _browser_name
+
+
+def set_browser_name(name):
+    global _browser_name
+
+    _browser_name = normalize_browser_name(
+        name
+    )
+
+    return True
+
+
+def get_browser_allow_fallback():
+    return _browser_allow_fallback
+
+
+def set_browser_allow_fallback(enabled):
+    global _browser_allow_fallback
+
+    _browser_allow_fallback = bool(
+        enabled
+    )
+
+    return True
+
+
+def normalize_browser_name(name):
+    if name is None:
+        return "auto"
+
+    normalized = str(
+        name
+    ).strip().lower()
+
+    if not normalized:
+        return "auto"
+
+    if normalized in (
+        "auto",
+        *SUPPORTED_BROWSERS,
+    ):
+        return normalized
+
+    return "auto"
+
+
+def candidate_paths(browser_name):
+    name = normalize_browser_name(
+        browser_name
+    )
+
+    if name == "auto":
+        return []
+
+    program_files = Path(
+        os.environ.get(
+            "ProgramFiles",
+            r"C:\Program Files",
+        )
+    )
+
+    program_files_x86 = Path(
+        os.environ.get(
+            "ProgramFiles(x86)",
+            r"C:\Program Files (x86)",
+        )
+    )
+
+    local_app = Path(
+        os.environ.get(
+            "LOCALAPPDATA",
+            "",
+        )
+    )
+
+    if name == "brave":
+        paths = list(
+            BRAVE_PATHS
+        )
+
+        if str(local_app):
+            paths.append(
+                local_app
+                / "BraveSoftware"
+                / "Brave-Browser"
+                / "Application"
+                / "brave.exe"
+            )
+
+        return paths
+
+    if name == "chrome":
+        return [
+            program_files
+            / "Google"
+            / "Chrome"
+            / "Application"
+            / "chrome.exe",
+            program_files_x86
+            / "Google"
+            / "Chrome"
+            / "Application"
+            / "chrome.exe",
+            local_app
+            / "Google"
+            / "Chrome"
+            / "Application"
+            / "chrome.exe",
+        ]
+
+    if name == "chromium":
+        return [
+            program_files
+            / "Chromium"
+            / "Application"
+            / "chrome.exe",
+            program_files_x86
+            / "Chromium"
+            / "Application"
+            / "chrome.exe",
+            local_app
+            / "Chromium"
+            / "Application"
+            / "chrome.exe",
+        ]
+
+    return []
+
+
+def find_browser_executable(browser_name):
+    name = normalize_browser_name(
+        browser_name
+    )
+
+    if name == "auto":
+        return None
+
+    for path in candidate_paths(name):
+
+        try:
+
+            if path.is_file():
+                return path
+
+        except OSError:
+            continue
+
+    for command in BROWSER_WHICH_NAMES.get(
+        name,
+        (),
+    ):
+
+        found = shutil.which(
+            command
+        )
+
+        if found:
+            return Path(
+                found
+            )
+
+    return None
+
+
+def detect_installed_browsers():
+    found = {}
+
+    for name in SUPPORTED_BROWSERS:
+
+        path = find_browser_executable(
+            name
+        )
+
+        if path is not None:
+            found[name] = path
+
+    return found
+
+
+def resolve_browser(
+    requested=None,
+    allow_fallback=None,
+):
+    requested_name = normalize_browser_name(
+        requested
+    )
+
+    if allow_fallback is None:
+        allow_fallback = get_browser_allow_fallback()
+    else:
+        allow_fallback = bool(
+            allow_fallback
+        )
+
+    installed = detect_installed_browsers()
+
+    if requested_name == "auto":
+
+        for name in AUTO_DETECT_ORDER:
+
+            if name in installed:
+                return name, installed[name]
+
+        raise FileNotFoundError(
+            "No supported browser could be detected.\n"
+            "Looked for Brave, Chrome, and Chromium."
+        )
+
+    if requested_name in installed:
+        return requested_name, installed[requested_name]
+
+    if allow_fallback:
+
+        for name in AUTO_DETECT_ORDER:
+
+            if name in installed:
+                return name, installed[name]
+
+    label = BROWSER_LABELS.get(
+        requested_name,
+        requested_name,
+    )
+
+    raise FileNotFoundError(
+        f"{label} could not be detected."
+    )
+
 
 def find_brave():
     """
     Locate Brave Browser on Windows.
     """
 
-    for path in BRAVE_PATHS:
+    path = find_browser_executable(
+        "brave"
+    )
 
-        if path.is_file():
-
-            return path
+    if path is not None:
+        return path
 
     raise FileNotFoundError(
         "Brave Browser could not be found.\n"
         "Checked:\n"
         + "\n".join(
             f"  {path}"
-            for path in BRAVE_PATHS
+            for path in candidate_paths(
+                "brave"
+            )
         )
     )
 
@@ -334,27 +613,43 @@ def sanitize_instance_name(instance):
 # PROFILE PATH
 # ============================================================
 
-def get_profile_path(instance=None):
+def get_profile_path(instance=None, browser="brave"):
     """
-    Return the persistent Brave profile directory.
+    Return the persistent profile directory for an account.
 
-    Example:
-
-        setup_driver("goldisduck")
-
-    uses:
+    Brave keeps the legacy path:
 
         selenium_profiles\\instance_goldisduck
+
+    Chrome and Chromium use a browser-specific folder so
+    they never share Brave's cookies and session data.
     """
 
     instance_name = sanitize_instance_name(
         instance
     )
 
-    profile_path = (
-        PROFILE_ROOT
-        / f"instance_{instance_name}"
+    browser_name = normalize_browser_name(
+        browser
     )
+
+    if browser_name in (
+        "auto",
+        "brave",
+    ):
+
+        profile_path = (
+            PROFILE_ROOT
+            / f"instance_{instance_name}"
+        )
+
+    else:
+
+        profile_path = (
+            PROFILE_ROOT
+            / browser_name
+            / f"instance_{instance_name}"
+        )
 
     profile_path.mkdir(
         parents=True,
@@ -705,20 +1000,20 @@ def is_instance_active(instance=None):
 
 def _create_driver(
     profile_path,
-    brave_path,
+    binary_path,
 ):
     """
-    Create a Brave Selenium instance.
+    Create a Chromium-based Selenium instance.
     """
 
     options = Options()
 
     # --------------------------------------------------------
-    # BRAVE EXECUTABLE
+    # BROWSER EXECUTABLE
     # --------------------------------------------------------
 
     options.binary_location = str(
-        brave_path
+        binary_path
     )
 
     # --------------------------------------------------------
@@ -772,7 +1067,7 @@ def _create_driver(
     )
 
     # --------------------------------------------------------
-    # START BRAVE
+    # START BROWSER
     # --------------------------------------------------------
 
     driver = webdriver.Chrome(
@@ -786,12 +1081,388 @@ def _create_driver(
     return driver
 
 
+BROWSER_TEST_URL = (
+    "data:text/html;charset=utf-8,"
+    "<html><body>"
+    "<h1 id='rpgbot-probe'>RPGBot</h1>"
+    "<input id='rpgbot-input'>"
+    "<button id='rpgbot-btn'>Go</button>"
+    "</body></html>"
+)
+
+
+def _diagnostic_check(label, ok, detail=""):
+    return {
+        "label": label,
+        "ok": bool(ok),
+        "detail": "" if detail is None else str(detail),
+    }
+
+
+def environment_diagnostics():
+    results = []
+
+    results.append(
+        _diagnostic_check(
+            "Python",
+            True,
+            sys.version.split()[0],
+        )
+    )
+
+    try:
+
+        import selenium
+
+        results.append(
+            _diagnostic_check(
+                "Selenium",
+                True,
+                getattr(
+                    selenium,
+                    "__version__",
+                    "",
+                ),
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Selenium",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        installed = detect_installed_browsers()
+        names = ", ".join(
+            installed.keys()
+        ) or "none"
+
+        results.append(
+            _diagnostic_check(
+                "Browser detected",
+                bool(installed),
+                names,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Browser detected",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        name, _path = resolve_browser(
+            get_browser_name(),
+            allow_fallback=get_browser_allow_fallback(),
+        )
+
+        results.append(
+            _diagnostic_check(
+                "Browser resolved",
+                True,
+                name,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Browser resolved",
+                False,
+                error,
+            )
+        )
+
+    return results
+
+
+def driver_diagnostics(driver):
+    results = []
+
+    alive = BrowserManager.is_alive(
+        driver
+    )
+
+    results.append(
+        _diagnostic_check(
+            "Driver connection",
+            alive,
+        )
+    )
+
+    if not alive:
+        return results
+
+    try:
+
+        capabilities = driver.capabilities or {}
+        version = (
+            capabilities.get("browserVersion")
+            or capabilities.get("version")
+            or ""
+        )
+
+        results.append(
+            _diagnostic_check(
+                "Browser version",
+                bool(version),
+                version,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Browser version",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        driver.get(
+            BROWSER_TEST_URL
+        )
+
+        current_url = driver.current_url or ""
+        navigated = (
+            "rpgbot-probe" in current_url
+            or current_url.startswith("data:")
+            or BROWSER_TEST_URL in current_url
+        )
+
+        results.append(
+            _diagnostic_check(
+                "Navigation",
+                navigated,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Navigation",
+                False,
+                error,
+            )
+        )
+
+        return results
+
+    try:
+
+        value = driver.execute_script(
+            "return 2 + 2;"
+        )
+
+        results.append(
+            _diagnostic_check(
+                "JavaScript",
+                value == 4,
+                value,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "JavaScript",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        element = driver.find_element(
+            By.CSS_SELECTOR,
+            "#rpgbot-probe",
+        )
+
+        results.append(
+            _diagnostic_check(
+                "CSS selector",
+                element is not None,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "CSS selector",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        element = driver.find_element(
+            By.XPATH,
+            "//h1[@id='rpgbot-probe']",
+        )
+
+        results.append(
+            _diagnostic_check(
+                "XPath",
+                element is not None,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "XPath",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        WebDriverWait(
+            driver,
+            WAIT_MEDIUM,
+        ).until(
+            EC.presence_of_element_located(
+                (By.ID, "rpgbot-probe")
+            )
+        )
+
+        results.append(
+            _diagnostic_check(
+                "WebDriverWait",
+                True,
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "WebDriverWait",
+                False,
+                error,
+            )
+        )
+
+    try:
+
+        field = driver.find_element(
+            By.CSS_SELECTOR,
+            "#rpgbot-input",
+        )
+
+        field.send_keys(
+            "eclipse"
+        )
+
+        typed = field.get_attribute(
+            "value"
+        )
+
+        button = driver.find_element(
+            By.CSS_SELECTOR,
+            "#rpgbot-btn",
+        )
+
+        button.click()
+
+        results.append(
+            _diagnostic_check(
+                "Browser interaction",
+                typed == "eclipse",
+            )
+        )
+
+    except Exception as error:
+
+        results.append(
+            _diagnostic_check(
+                "Browser interaction",
+                False,
+                error,
+            )
+        )
+
+    return results
+
+
+def _print_diagnostic_report(results):
+    _print_header(
+        "BROWSER TEST",
+        "Automation interface diagnostics",
+    )
+
+    all_ok = True
+
+    for item in results:
+
+        extra = ""
+
+        if item.get("detail"):
+            extra = f" ({item['detail']})"
+
+        if item["ok"]:
+
+            print(
+                f"  {GREEN}{BOLD}●{RESET} "
+                f"{GREEN}{item['label']}{extra}{RESET}"
+            )
+
+        else:
+
+            all_ok = False
+
+            print(
+                f"  {RED}{BOLD}✖{RESET} "
+                f"{RED}{item['label']}{extra}{RESET}"
+            )
+
+    print()
+
+    if all_ok:
+
+        _success(
+            "Browser test successful."
+        )
+
+    else:
+
+        _error(
+            "Browser test failed."
+        )
+
+    print()
+
+    return all_ok
+
+
 # ============================================================
 # BROWSER MANAGER
 # ============================================================
 
 class BrowserManager:
-    """Windows Brave Selenium lifecycle. Eclipse modules receive a driver."""
+    """Windows Chromium-family Selenium lifecycle. Eclipse modules receive a driver."""
 
     @classmethod
     def is_alive(cls, driver):
@@ -814,9 +1485,98 @@ class BrowserManager:
             return False
 
     @classmethod
+    def test(cls, driver=None):
+        """
+        Run browser diagnostics without logging into Eclipse.
+
+        When a live driver is provided, checks run in a temporary
+        tab so the current game page is restored afterward.
+        """
+
+        results = list(
+            environment_diagnostics()
+        )
+
+        opened_tab = False
+        original = None
+
+        if cls.is_alive(driver):
+
+            try:
+
+                original = driver.current_window_handle
+                driver.switch_to.new_window(
+                    "tab"
+                )
+                opened_tab = True
+
+            except Exception as error:
+
+                results.append(
+                    _diagnostic_check(
+                        "Probe tab",
+                        False,
+                        error,
+                    )
+                )
+
+            try:
+
+                results.extend(
+                    driver_diagnostics(
+                        driver
+                    )
+                )
+
+            finally:
+
+                if opened_tab:
+
+                    try:
+
+                        driver.close()
+
+                    except Exception:
+
+                        pass
+
+                    try:
+
+                        if original is not None:
+
+                            driver.switch_to.window(
+                                original
+                            )
+
+                    except Exception:
+
+                        pass
+
+        else:
+
+            results.append(
+                _diagnostic_check(
+                    "Driver connection",
+                    False,
+                    "No active Selenium session",
+                )
+            )
+
+        ok = all(
+            item["ok"]
+            for item in results
+        )
+
+        _print_diagnostic_report(
+            results
+        )
+
+        return ok
+
+    @classmethod
     def create(cls, instance=None):
         """
-        Start an independent persistent Brave instance.
+        Start an independent persistent browser instance.
 
         Example:
 
@@ -831,20 +1591,19 @@ class BrowserManager:
         )
 
         # --------------------------------------------------------
-        # ACQUIRE ACCOUNT LOCK BEFORE STARTING BRAVE
+        # ACQUIRE ACCOUNT LOCK BEFORE STARTING THE BROWSER
         # --------------------------------------------------------
 
         acquire_instance_lock(
             instance_name
         )
 
-        profile_path = get_profile_path(
-            instance_name
-        )
-
         try:
 
-            brave_path = find_brave()
+            selected_name, binary_path = resolve_browser(
+                get_browser_name(),
+                allow_fallback=get_browser_allow_fallback(),
+            )
 
         except Exception:
 
@@ -854,14 +1613,24 @@ class BrowserManager:
 
             raise
 
+        profile_path = get_profile_path(
+            instance_name,
+            browser=selected_name,
+        )
+
+        engine_label = BROWSER_LABELS.get(
+            selected_name,
+            selected_name,
+        )
+
         _print_header(
             "BROWSER STARTUP",
-            f"Initializing Brave for account: {instance_name}",
+            f"Initializing {engine_label} for account: {instance_name}",
         )
 
         _status(
             "ENGINE",
-            "Brave Browser",
+            engine_label,
             GOLD,
         )
 
@@ -905,7 +1674,7 @@ class BrowserManager:
 
                 driver = _create_driver(
                     profile_path,
-                    brave_path,
+                    binary_path,
                 )
 
                 time.sleep(
@@ -917,13 +1686,13 @@ class BrowserManager:
                 ):
 
                     raise WebDriverException(
-                        "Brave started but the Selenium "
-                        "session is not responding."
+                        f"{engine_label} started but the "
+                        "Selenium session is not responding."
                     )
 
                 _success(
-                    f"Brave instance '{instance_name}' "
-                    f"is running."
+                    f"{engine_label} instance "
+                    f"'{instance_name}' is running."
                 )
 
                 print()
@@ -972,7 +1741,7 @@ class BrowserManager:
         )
 
         raise RuntimeError(
-            f"Unable to start Brave for account "
+            f"Unable to start {engine_label} for account "
             f"'{instance_name}'.\n"
             f"Profile: {profile_path}\n"
             f"Last error: {last_error}"

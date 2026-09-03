@@ -49,6 +49,8 @@ DEFAULT_SETTINGS = {
     "session_time_limit_minutes": None,
     "auto_logout_after_session": False,
     "notify_on_shiny_encounter": True,
+    "browser_name": "auto",
+    "browser_allow_fallback": False,
        # ================================================================
         # AUTO-UPDATE SETTINGS (Option 3)
         # ================================================================
@@ -145,6 +147,10 @@ def gather_current_settings():
         get_auto_logout_after_session,
         get_notify_on_shiny_encounter,
     )
+    from browser import (
+        get_browser_name,
+        get_browser_allow_fallback,
+    )
  # Import auto-update getters (Option 3)
     try:
         from auto_update_settings_unfinished import (
@@ -210,6 +216,8 @@ def gather_current_settings():
         "session_time_limit_minutes": get_session_time_limit(),
         "auto_logout_after_session": get_auto_logout_after_session(),
         "notify_on_shiny_encounter": get_notify_on_shiny_encounter(),
+        "browser_name": get_browser_name(),
+        "browser_allow_fallback": get_browser_allow_fallback(),
         # Auto-update settings (Option 3)
                 "auto_update_enabled": get_auto_update_enabled(),
                 "auto_update_check_frequency_hours": get_auto_update_frequency(),
@@ -263,6 +271,10 @@ def apply_settings(settings):
         set_session_time_limit,
         set_auto_logout_after_session,
         set_notify_on_shiny_encounter,
+    )
+    from browser import (
+        set_browser_name,
+        set_browser_allow_fallback,
     )
    # Import auto-update setters (Option 3)
     try:
@@ -437,6 +449,20 @@ def apply_settings(settings):
         settings.get(
             "notify_on_shiny_encounter",
             DEFAULT_SETTINGS["notify_on_shiny_encounter"],
+        )
+    )
+
+    set_browser_name(
+        settings.get(
+            "browser_name",
+            DEFAULT_SETTINGS["browser_name"],
+        )
+    )
+
+    set_browser_allow_fallback(
+        settings.get(
+            "browser_allow_fallback",
+            DEFAULT_SETTINGS["browser_allow_fallback"],
         )
     )
     # Apply auto-update settings (Option 3)
