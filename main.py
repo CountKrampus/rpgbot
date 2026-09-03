@@ -31,10 +31,18 @@ def main():
             return
 
         # Use the selected account name as the instance ID.
-        # Each account gets its own persistent Brave profile
+        # Each account gets its own persistent browser profile
         # and account lock, allowing different accounts to run
         # simultaneously without profile conflicts.
-        driver = BrowserManager.create(account)
+        # 
+        # Load browser preference from settings (defaults to "auto" if not set)
+        loaded_settings = settings.load_settings()
+        browser_choice = loaded_settings.get("browser_name", "auto")
+        
+        driver = BrowserManager.create(
+            account,
+            browser=browser_choice,
+        )
 
         if not login(
             driver,
