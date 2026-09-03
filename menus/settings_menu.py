@@ -79,6 +79,8 @@ from utils import (
     set_notify_on_shiny_encounter,
 )
 
+from browser_diagnostics import DiagnosticsManager
+
 
 # ============================================================
 # CONSOLE INITIALIZATION
@@ -1868,20 +1870,39 @@ def _reset_settings():
 
 
 # ============================================================
+# BROWSER DIAGNOSTICS
+# ============================================================
+
+def _run_browser_diagnostics():
+    """
+    Run browser diagnostics to test environment
+    and browser connectivity.
+    """
+
+    _blank_row()
+
+    DiagnosticsManager.run_full_diagnostics()
+
+    input(
+        f"\n{KEY_COLOR}Press Enter to continue...{RESET}"
+    )
+
+
+# ============================================================
 # ADVANCED SUBMENU
 # ============================================================
 
 def _advanced_submenu():
     """
-    Submenu for Advanced Settings with Timing
-    and Network options.
+    Submenu for Advanced Settings with Timing,
+    Network, and Diagnostics options.
     """
 
     while True:
 
         _title(
             "ADVANCED SETTINGS",
-            "Timing and network configuration",
+            "Timing, network, and diagnostics",
         )
 
         _option(
@@ -1898,6 +1919,12 @@ def _advanced_submenu():
 
         _option(
             "3",
+            "Browser Diagnostics",
+            "test browser setup and connectivity",
+        )
+
+        _option(
+            "4",
             "Back",
         )
 
@@ -1916,6 +1943,10 @@ def _advanced_submenu():
             _advanced_network_settings()
 
         elif choice == "3":
+
+            _run_browser_diagnostics()
+
+        elif choice == "4":
 
             return
 
