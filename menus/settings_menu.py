@@ -2540,3 +2540,104 @@ def settings_menu(driver):
             print(
                 f"{RED}✗ Invalid choice.{RESET}"
             )
+
+# ================================================================
+# PLATFORM-AWARE BROWSER SELECTION
+# ================================================================
+
+def _browser_selection_advanced():
+    """
+    Advanced browser selection with platform awareness.
+    Shows available browsers based on platform.
+    """
+
+    while True:
+
+        _title(
+            "SELECT BROWSER",
+            "Choose which browser to use",
+        )
+
+        current = settings.load_settings().get(
+            "browser_name",
+            "auto",
+        )
+        
+        platform = settings.load_settings().get(
+            "browser_platform",
+            "auto",
+        )
+
+        _status(
+            "Current",
+            current.title(),
+            CYAN,
+        )
+        
+        _status(
+            "Platform",
+            platform.title(),
+            CYAN,
+        )
+
+        _section(
+            "AVAILABLE BROWSERS"
+        )
+
+        # Get available browsers for platform
+        try:
+            available = settings.get_available_browsers(platform)
+        except:
+            available = ["brave", "chrome", "chromium", "auto"]
+
+        for i, browser in enumerate(available, 1):
+            if browser == "auto":
+                label = "Auto Detect"
+                desc = "Tries: Brave → Chrome → Chromium"
+            elif browser == "android-cdp":
+                label = "Android (Any)"
+                desc = "Chrome/Brave on Android via CDP"
+            elif browser == "android-brave":
+                label = "Brave (Android)"
+                desc = "Brave on Android via CDP"
+            elif browser == "termux":
+                label = "Termux Chromium"
+                desc = "Chromium in Termux"
+            else:
+                label = browser.title()
+                desc = f"Use {browser.title()}"
+            
+            _option(str(i), label, desc)
+
+        _option(
+            str(len(available) + 1),
+            "Back",
+        )
+
+        _close_box()
+
+        choice = input(
+            f"\n{KEY_COLOR}Choose:{RESET} "
+        ).strip()
+
+        try:
+            idx = int(choice) - 1
+            
+            if 0 <= idx < len(available):
+                selected = available[idx]
+                _update_browser_setting(selected)
+                print(
+                    f"{GREEN}✓ Browser set to {selected.title()}.{RESET}"
+                )
+                break
+            elif choice == str(len(available) + 1):
+                return
+            else:
+                print(
+                    f"{RED}✗ Invalid choice.{RESET}"
+                )
+        except (ValueError, IndexError):
+            print(
+                f"{RED}✗ Invalid choice.{RESET}"
+            )
+

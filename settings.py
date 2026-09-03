@@ -485,3 +485,42 @@ def apply_settings(settings):
                 DEFAULT_SETTINGS["auto_update_notify"],
             )
         )
+
+# ================================================================
+# CROSS-PLATFORM BROWSER MODE SUPPORT
+# ================================================================
+
+# Browser modes per platform
+BROWSER_MODES_WINDOWS = ["launch", "attach"]
+BROWSER_MODES_ANDROID = ["cdp-remote", "attach"]
+BROWSER_MODES_LINUX = ["launch", "attach"]
+
+# Browser choices per platform  
+BROWSERS_WINDOWS = ["brave", "chrome", "chromium", "auto"]
+BROWSERS_ANDROID = ["android-cdp", "android-brave", "termux"]
+BROWSERS_LINUX = ["brave", "chrome", "chromium", "auto"]
+
+# Get available browsers for platform
+def get_available_browsers(platform="auto"):
+    """Get list of available browsers for a platform."""
+    if platform == "windows" or platform == "auto":
+        return BROWSERS_WINDOWS
+    elif platform == "android":
+        return BROWSERS_ANDROID
+    elif platform == "linux":
+        return BROWSERS_LINUX
+    else:
+        return BROWSERS_WINDOWS  # Default to Windows
+
+
+def get_available_modes(platform="auto"):
+    """Get list of available browser modes for a platform."""
+    if platform == "windows" or platform == "auto":
+        return BROWSER_MODES_WINDOWS
+    elif platform == "android":
+        return BROWSER_MODES_ANDROID
+    elif platform == "linux":
+        return BROWSER_MODES_LINUX
+    else:
+        return BROWSER_MODES_WINDOWS  # Default to Windows
+
