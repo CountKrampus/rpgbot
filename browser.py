@@ -374,7 +374,7 @@ def find_browser(browser_name="brave"):
     """
     Find browser executable by name.
     
-    Supports: brave, chrome, chromium, auto
+    Supports: brave, chrome, chromium, auto, android-cdp, termux
     """
     
     browser_name = str(browser_name).lower().strip()
@@ -385,6 +385,19 @@ def find_browser(browser_name="brave"):
         return find_chrome()
     elif browser_name == "chromium":
         return find_chromium()
+    elif browser_name == "android-cdp":
+        # CDP remote debugging on Android device
+        return "android-cdp"
+    elif browser_name == "termux":
+        # Termux Chromium
+        try:
+            from android_browser import AndroidBrowserManager
+            path = AndroidBrowserManager.find_termux_chromium()
+            if path:
+                return path
+            raise FileNotFoundError("Termux Chromium not found")
+        except ImportError:
+            raise FileNotFoundError("Android browser module not available")
     elif browser_name == "auto":
         # Auto-detect: try in order
         try:
@@ -409,7 +422,7 @@ def find_browser(browser_name="brave"):
     else:
         raise ValueError(
             f"Unknown browser: {browser_name}\n"
-            "Supported: brave, chrome, chromium, auto"
+            "Supported: brave, chrome, chromium, auto, android-cdp, termux"
         )
 
 
@@ -943,49 +956,45 @@ class BrowserManager:
         """
         Start an independent persistent browser instance.
 
-        Supports: brave, chrome, chromium, auto
+        Supports: brave, chrome, chromium, auto, android-cdp, termux
 
         Example:
 
             driver = BrowserManager.create("goldisduck", browser="brave")
-            driver = BrowserManager.create("goldisduck", browser="chrome")
-            driver = BrowserManager.create("goldisduck", browser="chromium")
-            driver = BrowserManager.create("goldisduck", browser="auto")
+            driver = BrowserManager.create("goldisduck", browser="android-cdp")
+            driver = BrowserManager.create("goldisduck", browser="termux")
 
         Every account receives its own persistent profile and
         cross-process lock.
+        
+        For android-cdp: Requires CDP to be forwarded via ADB
+        For termux: Requires Termux environment
         """
 
-        instance_name = sanitize_instance_name(
-            instance
-        )
-        
+        instance_name = sanitize_instance_name(instance)
         browser_name = str(browser).lower().strip()
+
+        # Handle Android CDP specially
+        if browser_name == "android-cdp":
+            return cls._create_android_cdp_driver(instance_name)
+        
+        # Handle Termux Chromium
+        if browser_name == "termux":
+            return cls._create_termux_driver(instance_name)
 
         # --------------------------------------------------------
         # ACQUIRE ACCOUNT LOCK BEFORE STARTING BROWSER
         # --------------------------------------------------------
 
-        acquire_instance_lock(
-            instance_name
-        )
+        acquire_instance_lock(instance_name)
 
-        profile_path = get_profile_path(
-            instance_name
-        )
+        profile_path = get_profile_path(instance_name)
 
         try:
-
-            browser_path = find_browser(
-                browser_name
-            )
+            browser_path = find_browser(browser_name)
 
         except Exception:
-
-            release_instance_lock(
-                instance_name
-            )
-
+            release_instance_lock(instance_name)
             raise
 
         # Determine display name for browser
@@ -1115,6 +1124,111 @@ class BrowserManager:
             f"Profile: {profile_path}\n"
             f"Last error: {last_error}"
         )
+
+    @classmethod
+    def _create_android_cdp_driver(cls, instance_name):
+        """Create driver via Android CDP remote debugging."""
+        
+        _print_header(
+            "ANDROID CDP CONNECTION",
+            f"Connecting to remote Chrome/Brave on device: {instance_name}",
+        )
+        
+        _status(
+            "MODE",
+            "CDP Remote Debugging",
+            GOLD,
+        )
+        
+        try:
+            from android_browser import AndroidBrowserManager
+            
+            _status(
+                "SETUP",
+                "Configuring ADB forwarding...",
+                CYAN,
+            )
+            
+            result = AndroidBrowserManager.setup_cdp_forwarding()
+            
+            if not result["success"]:
+                _error(f"CDP Setup Failed: {result['error']}")
+                raise Exception(result['error'])
+            
+            _success(f"CDP forwarding ready: {result['url']}")
+            
+            _status(
+                "CONNECTION",
+                "Connecting to remote browser...",
+                CYAN,
+            )
+            
+            driver_result = AndroidBrowserManager.create_cdp_driver(
+                result['url']
+            )
+            
+            if not driver_result["success"]:
+                _error(f"Driver creation failed: {driver_result['error']}")
+                raise Exception(driver_result['error'])
+            
+            _success("Connected to remote browser")
+            print()
+            
+            return driver_result["driver"]
+        
+        except ImportError:
+            _error("Android browser module not available")
+            raise
+
+    @classmethod
+    def _create_termux_driver(cls, instance_name):
+        """Create driver for Termux Chromium."""
+        
+        acquire_instance_lock(instance_name)
+        
+        _print_header(
+            "TERMUX CHROMIUM",
+            f"Launching Termux Chromium for account: {instance_name}",
+        )
+        
+        _status(
+            "ENGINE",
+            "Termux Chromium",
+            GOLD,
+        )
+        
+        try:
+            from android_browser import AndroidBrowserManager
+            
+            chromium_path = AndroidBrowserManager.find_termux_chromium()
+            
+            if not chromium_path:
+                _error("Termux Chromium not found")
+                release_instance_lock(instance_name)
+                raise FileNotFoundError("Termux Chromium not installed")
+            
+            profile_path = get_profile_path(instance_name)
+            
+            _status(
+                "LAUNCH",
+                "Starting Termux Chromium...",
+                CYAN,
+            )
+            
+            driver = _create_driver(
+                profile_path,
+                chromium_path,
+                "termux",
+            )
+            
+            _success("Termux Chromium started")
+            print()
+            
+            return driver
+        
+        except Exception as e:
+            release_instance_lock(instance_name)
+            raise
 
     @classmethod
     def close(cls, driver, instance=None):
