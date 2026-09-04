@@ -26,8 +26,9 @@ from selenium.common.exceptions import (
 
 try:
     from secure_storage import SecureStorage
+    keyring_available = True
 except ImportError:
-    keyring = None
+    keyring_available = False
 
 
 # ============================================================
@@ -167,7 +168,7 @@ def remove_account_name(username: str) -> None:
         accounts.remove(username)
         _write_accounts(accounts)
 
-    if keyring is not None:
+    if keyring_available:
         try:
             SecureStorage.remove_credential(username)
         except Exception:
@@ -178,7 +179,7 @@ def get_saved_password(username: str) -> Optional[str]:
     if not username:
         return None
 
-    if keyring is None:
+    if not keyring_available:
         return None
 
     try:
@@ -188,7 +189,7 @@ def get_saved_password(username: str) -> Optional[str]:
 
 
 def save_password(username: str, password: str) -> None:
-    if not username or keyring is None:
+    if not username or not keyring_available:
         return
 
     try:
@@ -258,7 +259,7 @@ def account_selector() -> Optional[str]:
 
     while True:
         accounts = get_accounts()
-        sec_status = f"{GREEN}Keyring (Encrypted){RESET}" if keyring else f"{YELLOW}File Storage{RESET}"
+        sec_status = f"{GREEN}Keyring (Encrypted){RESET}" if keyring_available else f"{YELLOW}File Storage{RESET}"
         hud = f"  {GRAY}PROFILES:{RESET} {CYAN}{len(accounts)} Saved{RESET}  │  {GRAY}SECURITY:{RESET} {sec_status}  │  {GRAY}STATUS:{RESET} {GREEN}Ready{RESET}"
 
         print()
