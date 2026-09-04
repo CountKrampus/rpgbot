@@ -9,6 +9,7 @@ from selenium.common.exceptions import (
     NoSuchElementException,
 )
 
+from config import BASE_URL, SEARCH_DELAY as DEFAULT_SEARCH_DELAY, WAIT_LONG
 from capture import capture_encounter
 from database_search import hunt_pokemon as db_hunt_pokemon
 from break_check import check_and_handle_break
@@ -17,20 +18,86 @@ from utils import (
     normalize,
     wait_for_document_ready,
 )
+from cancellation import interruptible_wait, is_cancel_requested
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
-BASE_URL = "https://eclipserpg.com"
+SEARCH_DELAY = DEFAULT_SEARCH_DELAY
 
-WAIT_LONG = 20
 
-SEARCH_DELAY = (
-    1.5,
-    2.5,
-)
+# ============================================================
+# MAP MENU STYLE
+# ============================================================
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+CYAN = "\033[96m"
+MAGENTA = "\033[95m"
+PURPLE = "\033[38;5;141m"
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+WHITE = "\033[97m"
+GRAY = "\033[90m"
+MAP_MENU_WIDTH = 60
+ENCOUNTER_WIDTH = 60
+
+
+def _map_row(content):
+    visible = re.sub(r"\033\[[0-9;]*m", "", content)
+    padding = max(0, MAP_MENU_WIDTH - len(visible))
+    return (
+        f"{PURPLE}│{RESET}{content}"
+        f"{' ' * padding}{PURPLE}│{RESET}"
+    )
+
+
+def _map_top():
+    return f"{PURPLE}╭{'─' * MAP_MENU_WIDTH}╮{RESET}"
+
+
+def _map_mid():
+    return f"{PURPLE}├{'─' * MAP_MENU_WIDTH}┤{RESET}"
+
+
+def _map_bottom():
+    return f"{PURPLE}╰{'─' * MAP_MENU_WIDTH}╯{RESET}"
+
+
+def _encounter_row(content):
+    visible = re.sub(r"\033\[[0-9;]*m", "", content)
+    padding = max(0, ENCOUNTER_WIDTH - len(visible))
+    return (
+        f"{CYAN}│{RESET}{content}"
+        f"{' ' * padding}{CYAN}│{RESET}"
+    )
+
+
+def _print_encounter_banner(name, level, rarity_marker=""):
+    print()
+    print(f"{CYAN}╭{'─' * ENCOUNTER_WIDTH}╮{RESET}")
+    print(
+        _encounter_row(
+            f"  {BOLD}{YELLOW}POKÉMON ENCOUNTER{RESET}"
+        )
+    )
+    print(f"{CYAN}├{'─' * ENCOUNTER_WIDTH}┤{RESET}")
+    print(
+        _encounter_row(
+            f"  {GRAY}Wild Pokémon:{RESET} "
+            f"{BOLD}{GREEN}{name}{RESET}"
+            f"{rarity_marker}"
+        )
+    )
+    print(
+        _encounter_row(
+            f"  {GRAY}Level:{RESET} {WHITE}{level}{RESET}"
+        )
+    )
+    print(f"{CYAN}╰{'─' * ENCOUNTER_WIDTH}╯{RESET}")
 
 
 def get_search_delay():
@@ -59,6 +126,73 @@ def set_search_delay(min_seconds, max_seconds):
     SEARCH_DELAY = (min_seconds, max_seconds)
 
     return True
+
+
+def normalize_map_rotation(maps):
+    """Return a stable, de-duplicated map sequence.
+
+    Rotation is deliberately data-only; callers still open maps through
+    the existing safe link handlers.
+    """
+    if not maps:
+        return []
+    result = []
+    seen = set()
+    for item in maps:
+        if isinstance(item, str):
+            name = item.strip()
+            entry = {"name": name, "is_exclusive": False, "area": None}
+        elif isinstance(item, dict):
+            name = str(item.get("name", "")).strip()
+            entry = dict(item)
+        else:
+            continue
+        key = re.sub(r"[\W_]+", "", normalize(name))
+        if not key or key in seen:
+            continue
+        entry["name"] = name
+        entry.setdefault("is_exclusive", False)
+        entry.setdefault("area", None)
+        seen.add(key)
+        result.append(entry)
+    return result
+
+
+def run_search_rotation(driver, maps, searches, target_pokemon=None,
+                        duration_seconds=None):
+    """Search each supplied map in order, reopening only via safe handlers.
+
+    This non-interactive entry point is suitable for queued callers and keeps
+    target matching and cancellation behavior identical to ``run_searches``.
+    """
+    if searches <= 0:
+        return {"completed_maps": 0, "completed_searches": 0}
+    rotation = normalize_map_rotation(maps)
+    completed_maps = 0
+    completed_searches = 0
+    for map_info in rotation:
+        if is_cancel_requested():
+            break
+        if map_info.get("is_exclusive"):
+            if not map_info.get("area"):
+                continue
+            opened = open_exclusive_area(driver, map_info["area"])
+        else:
+            opened = open_map(driver, map_info["name"])
+        if not opened:
+            continue
+        run_searches(
+            driver, map_info["name"], searches,
+            is_exclusive=bool(map_info.get("is_exclusive")),
+            area=map_info.get("area"), target_pokemon=target_pokemon,
+            duration_seconds=duration_seconds,
+        )
+        completed_maps += 1
+        completed_searches += searches
+    return {
+        "completed_maps": completed_maps,
+        "completed_searches": completed_searches,
+    }
 
 EXCLUSIVE_AREAS_URL = (
     f"{BASE_URL}/legendary_areas?kind=exclusive"
@@ -114,7 +248,7 @@ def set_log_level(level):
 # ============================================================
 
 _search_encounter_timeout = 20  # seconds
-_encounter_detection_retry_delay = 500  # milliseconds
+_encounter_detection_retry_delay = 250  # milliseconds
 
 
 def get_search_encounter_timeout():
@@ -519,6 +653,7 @@ def get_wild_pokemon(driver):
         try:
             elements = driver.find_elements(
                 By.CSS_SELECTOR,
+                "#map-box a[href*='amount_viewer?pokemon='], "
                 "div.wild-pokes a.map-wild-poke"
             )
 
@@ -536,6 +671,7 @@ def get_wild_pokemon(driver):
                 and (
                     "map-wild-poke" in source
                     or "wild-pokes" in source
+                    or "amount_viewer?pokemon=" in source
                 )
             ):
                 break
@@ -553,6 +689,7 @@ def get_wild_pokemon(driver):
 
         elements = driver.find_elements(
             By.CSS_SELECTOR,
+            "#map-box a[href*='amount_viewer?pokemon='], "
             "div.wild-pokes a.map-wild-poke"
         )
 
@@ -662,7 +799,8 @@ def get_wild_pokemon(driver):
     if source:
 
         # --------------------------------------------------------
-        # Match ANY anchor containing map-wild-poke.
+        # Match the legacy wild-pokes anchors and the current
+        # special-Pokemon amount_viewer anchors.
         #
         # We don't assume:
         #
@@ -673,7 +811,11 @@ def get_wild_pokemon(driver):
 
         anchor_pattern = re.compile(
             r"<a\b"
-            r"(?=[^>]*\bclass\s*=\s*[\"'][^\"']*\bmap-wild-poke\b[^\"']*[\"'])"
+            r"(?=[^>]*(?:"
+            r"\bclass\s*=\s*[\"'][^\"']*\bmap-wild-poke\b[^\"']*[\"']"
+            r"|"
+            r"\bhref\s*=\s*[\"'][^\"']*amount_viewer\?pokemon=[^\"']+[\"']"
+            r"))"
             r"[^>]*>"
             r".*?"
             r"</a>",
@@ -877,6 +1019,12 @@ def get_wild_pokemon(driver):
                 "    [DEBUG] page_source contains "
                 f"'map-wild-poke': "
                 f"{'map-wild-poke' in source}"
+            )
+
+            print(
+                "    [DEBUG] page_source contains "
+                f"'amount_viewer?pokemon=': "
+                f"{'amount_viewer?pokemon=' in source}"
             )
 
     return unique
@@ -1448,7 +1596,7 @@ def find_encounter_fight(driver):
     return None
 
 
-def click_encounter_fight(driver):
+def click_encounter_fight(driver, timeout=None):
 
     print(
         "  Looking for encounter Fight!..."
@@ -1456,7 +1604,9 @@ def click_encounter_fight(driver):
 
     start = time.time()
 
-    while time.time() - start < WAIT_LONG:
+    max_wait = WAIT_LONG if timeout is None else max(0, timeout)
+
+    while time.time() - start < max_wait:
 
         fight = find_encounter_fight(
             driver
@@ -1847,7 +1997,8 @@ def open_exclusive_area(
 
 def handle_search_encounter(
     driver,
-    target_pokemon=None
+    target_pokemon=None,
+    fight_clicked=False,
 ):
 
     encountered = get_encounter_pokemon(
@@ -1862,10 +2013,10 @@ def handle_search_encounter(
             else ""
         )
 
-        print(
-            f"  Wild {encountered['name']} "
-            f"Lv. {encountered['level']}"
-            f"{rarity_marker}"
+        _print_encounter_banner(
+            encountered["name"],
+            encountered["level"],
+            rarity_marker,
         )
 
         _record_encounter(
@@ -1909,7 +2060,7 @@ def handle_search_encounter(
             f"  ★ TARGET FOUND: {encountered['name']}"
         )
 
-    if not click_encounter_fight(
+    if not fight_clicked and not click_encounter_fight(
         driver
     ):
 
@@ -1926,7 +2077,7 @@ def handle_search_encounter(
     if result:
 
         print(
-            "✓ Encounter capture completed."
+            f"{BOLD}{CYAN}✓ Encounter capture completed.{RESET}"
         )
 
         # ----------------------------------------------------
@@ -1969,6 +2120,7 @@ def run_searches(
     is_exclusive=False,
     area=None,
     target_pokemon=None,
+    duration_seconds=None,
 ):
 
     print()
@@ -1980,8 +2132,27 @@ def run_searches(
     completed = 0
 
     search_number = 1
+    started_at = time.time()
+    cancel_after_current = False
 
     while search_number <= searches:
+        if is_cancel_requested():
+            print("⚠ Search cancelled. No new request will be started.")
+            _record_search_session(map_name, completed)
+            print(
+                f"  Search summary: {completed} completed request(s) "
+                f"on {map_name}."
+            )
+            return False
+
+        if (
+            duration_seconds is not None
+            and time.time() - started_at >= duration_seconds
+        ):
+            print(
+                f"{GREEN}✓ Search time limit reached.{RESET}"
+            )
+            break
 
         current, maximum = get_search_progress(
             driver
@@ -2019,12 +2190,17 @@ def run_searches(
 
             return False
 
-        time.sleep(
+        if interruptible_wait(
             random.uniform(
                 SEARCH_DELAY[0],
                 SEARCH_DELAY[1]
             )
-        )
+        ):
+            cancel_after_current = True
+            print(
+                "⚠ Cancellation requested. "
+                "Finishing the current search result..."
+            )
 
         # ----------------------------------------------------
         # Check for Pokémon encounter.
@@ -2034,15 +2210,23 @@ def run_searches(
             driver
         )
 
+        if fight is None and cancel_after_current:
+            print(
+                "  Waiting briefly for the current encounter result..."
+            )
+            if click_encounter_fight(driver, timeout=2):
+                fight = True
+
         if fight is not None:
 
             print(
-                "✓ Pokémon encounter detected."
+                f"{BOLD}{GREEN}✓ POKÉMON ENCOUNTER DETECTED!{RESET}"
             )
 
             encounter_result = handle_search_encounter(
                 driver,
-                target_pokemon=target_pokemon
+                target_pokemon=target_pokemon,
+                fight_clicked=(fight is True),
             )
 
             if encounter_result == "not_target":
@@ -2051,15 +2235,13 @@ def run_searches(
                     "  → Continuing search."
                 )
 
-                time.sleep(
-                    random.uniform(
-                        1.0,
-                        1.5
-                    )
-                )
+                time.sleep(0.4)
 
                 completed += 1
                 search_number += 1
+
+                if cancel_after_current:
+                    break
 
                 continue
 
@@ -2114,40 +2296,40 @@ def run_searches(
                     "  ✓ Recovered - resuming search."
                 )
 
-                time.sleep(
-                    random.uniform(
-                        1.0,
-                        1.5
-                    )
-                )
+                time.sleep(0.4)
 
                 search_number += 1
+
+                if cancel_after_current:
+                    break
 
                 continue
 
             time.sleep(
                 random.uniform(
-                    1.0,
-                    1.5
+                    SEARCH_DELAY[0],
+                    SEARCH_DELAY[1]
                 )
             )
 
         completed += 1
-
         search_number += 1
 
+        if cancel_after_current:
+            break
+
     print()
-    print(
-        f"✓ Finished {searches} searches "
-        f"on {map_name}."
-    )
+    if cancel_after_current:
+        print(f"⚠ Search cancelled after {completed} completed request(s).")
+    else:
+        print(f"✓ Finished {searches} searches on {map_name}.")
 
     _record_search_session(
         map_name,
         completed
     )
 
-    return True
+    return not cancel_after_current
 
 
 def check_map_access(driver, map_data):
@@ -3750,40 +3932,33 @@ def normal_maps_mode(driver):
     """
 
     print()
-    print(
-        "=" * 60
-    )
-
-    print(
-        "NORMAL MAPS"
-    )
-
-    print(
-        "=" * 60
-    )
-
-    print()
+    print(_map_top())
+    print(_map_row(f"  {BOLD}{MAGENTA}NORMAL MAPS{RESET}"))
+    print(_map_mid())
 
     for i, map_name in enumerate(
         MAPS,
         1
     ):
 
-        print(
-            f"{i:2}. {map_name}"
-        )
+        print(_map_row(
+            f"  {CYAN}{i:2}.{RESET} {WHITE}{map_name}{RESET}"
+        ))
 
     back_number = len(MAPS) + 1
 
-    print(
-        f"{back_number:2}. Back"
-    )
+    print(_map_mid())
+    print(_map_row(
+        f"  {YELLOW}{back_number:2}.{RESET} {GRAY}Back{RESET}"
+    ))
+    print(_map_bottom())
 
     while True:
 
         choice = input(
-            f"\nChoose map number "
+            f"\n{BOLD}{CYAN}❯ Choose map number "
             f"(1-{back_number}): "
+            f"{RESET}"
         ).strip()
 
         try:
@@ -3794,10 +3969,8 @@ def normal_maps_mode(driver):
 
         except ValueError:
 
-            print(
-                "✗ Please enter a number from "
-                f"1 to {back_number}."
-            )
+            print(f"{RED}✗ Please enter a number from 1 to "
+                  f"{back_number}.{RESET}")
 
             continue
 
@@ -3807,10 +3980,8 @@ def normal_maps_mode(driver):
         if 1 <= number <= len(MAPS):
             break
 
-        print(
-            "✗ Please enter a number from "
-            f"1 to {back_number}."
-        )
+        print(f"{RED}✗ Please enter a number from 1 to "
+              f"{back_number}.{RESET}")
 
     map_name = MAPS[
         number - 1
@@ -3833,17 +4004,11 @@ def exclusive_maps_mode(driver):
     """
 
     print()
-    print(
-        "=" * 60
-    )
-
-    print(
-        "EXCLUSIVE LEGENDARY AREAS"
-    )
-
-    print(
-        "=" * 60
-    )
+    print(_map_top())
+    print(_map_row(
+        f"  {BOLD}{MAGENTA}EXCLUSIVE LEGENDARY AREAS{RESET}"
+    ))
+    print(_map_mid())
 
     exclusive_maps = get_exclusive_maps(
         driver
@@ -3851,39 +4016,38 @@ def exclusive_maps_mode(driver):
 
     if not exclusive_maps:
 
-        print()
-        print(
-            "No exclusive maps are currently unlocked."
-        )
+        print(_map_row(f"  {YELLOW}No exclusive maps are currently unlocked.{RESET}"))
+        print(_map_bottom())
 
         input(
-            "\nPress Enter to return to the search menu..."
+            f"\n{GRAY}Press Enter to return to the search menu...{RESET}"
         )
 
         return
-
-    print()
 
     for i, area in enumerate(
         exclusive_maps,
         1
     ):
 
-        print(
-            f"{i:2}. {area['name']}"
-        )
+        print(_map_row(
+            f"  {CYAN}{i:2}.{RESET} {WHITE}{area['name']}{RESET}"
+        ))
 
     back_number = len(exclusive_maps) + 1
 
-    print(
-        f"{back_number:2}. Back"
-    )
+    print(_map_mid())
+    print(_map_row(
+        f"  {YELLOW}{back_number:2}.{RESET} {GRAY}Back{RESET}"
+    ))
+    print(_map_bottom())
 
     while True:
 
         choice = input(
-            f"\nChoose map number "
+            f"\n{BOLD}{CYAN}❯ Choose map number "
             f"(1-{back_number}): "
+            f"{RESET}"
         ).strip()
 
         try:
@@ -3894,10 +4058,8 @@ def exclusive_maps_mode(driver):
 
         except ValueError:
 
-            print(
-                "✗ Please enter a number from "
-                f"1 to {back_number}."
-            )
+            print(f"{RED}✗ Please enter a number from 1 to "
+                  f"{back_number}.{RESET}")
 
             continue
 
@@ -3907,10 +4069,8 @@ def exclusive_maps_mode(driver):
         if 1 <= number <= len(exclusive_maps):
             break
 
-        print(
-            "✗ Please enter a number from "
-            f"1 to {back_number}."
-        )
+        print(f"{RED}✗ Please enter a number from 1 to "
+              f"{back_number}.{RESET}")
 
     area = exclusive_maps[
         number - 1

@@ -14,6 +14,46 @@ from helpers import safe_click, wait_for_document_ready
 from search import find_encounter_fight, click_encounter_fight
 from capture import capture_encounter
 from break_check import check_and_handle_break
+from cancellation import is_cancel_requested
+
+
+# ============================================================
+# MINER CONSOLE STYLE
+# ============================================================
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+CYAN = "\033[96m"
+MAGENTA = "\033[95m"
+PURPLE = "\033[38;5;141m"
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+WHITE = "\033[97m"
+GRAY = "\033[90m"
+
+MINER_WIDTH = 60
+
+
+def _miner_row(content):
+    visible = re.sub(r"\033\[[0-9;]*m", "", content)
+    padding = max(0, MINER_WIDTH - len(visible))
+    return (
+        f"{PURPLE}│{RESET}{content}"
+        f"{' ' * padding}{PURPLE}│{RESET}"
+    )
+
+
+def _miner_box_top():
+    return f"{PURPLE}╭{'─' * MINER_WIDTH}╮{RESET}"
+
+
+def _miner_box_mid():
+    return f"{PURPLE}├{'─' * MINER_WIDTH}┤{RESET}"
+
+
+def _miner_box_bottom():
+    return f"{PURPLE}╰{'─' * MINER_WIDTH}╯{RESET}"
 
 
 # ============================================================
@@ -103,6 +143,77 @@ def create_mining_stats():
         "started": time.time(),
         "area_completed": False,
     }
+
+
+def mining_resource_totals(stats):
+    """Return a plain copy of gathered resources for callers/UI."""
+    return dict(stats.get("resources", {}))
+
+
+def mining_resource_target_reached(stats, target):
+    """Check a resource target mapping without touching browser state."""
+    if not target:
+        return False
+    resources = stats.get("resources", {})
+    available = {str(name).casefold(): amount
+                 for name, amount in resources.items()}
+    wanted = [(str(name).casefold(), amount)
+              for name, amount in target.items() if amount > 0]
+    return bool(wanted) and all(available.get(name, 0) >= amount
+                               for name, amount in wanted)
+
+
+def mining_needs_attention(driver):
+    """Detect explicit game prompts that require user-safe recovery.
+
+    Detection only; no inferred clicks or inventory changes are performed.
+    """
+    text = _body_text(driver)
+    return any(phrase in text for phrase in (
+        "inventory is full", "not enough space", "need to heal",
+        "your pokemon fainted", "please heal",
+    ))
+
+
+def find_mining_areas(driver):
+    """List visible mining-area links exposed by the current page."""
+    areas = []
+    seen = set()
+    try:
+        links = driver.find_elements(
+            By.XPATH,
+            "//a[contains(@href,'mine') or contains(@href,'mining')]",
+        )
+        for link in links:
+            if not link.is_displayed():
+                continue
+            href = link.get_attribute("href") or ""
+            name = (link.text or "").strip()
+            key = (name.lower(), href.lower())
+            if name and href and key not in seen:
+                seen.add(key)
+                areas.append({"name": name, "href": href})
+    except Exception:
+        pass
+    return areas
+
+
+def select_mining_area(driver, area):
+    """Safely select an area by clicking its discovered link."""
+    if not isinstance(area, dict) or not area.get("name"):
+        return False
+    wanted = area["name"].strip().lower()
+    try:
+        for item in find_mining_areas(driver):
+            if item["name"].strip().lower() == wanted:
+                links = driver.find_elements(By.XPATH, "//a[@href]")
+                for link in links:
+                    if ((link.text or "").strip().lower() == wanted
+                            and link.is_displayed() and link.is_enabled()):
+                        return bool(safe_click(driver, link))
+    except Exception:
+        pass
+    return False
 
 
 # ============================================================
@@ -520,6 +631,8 @@ def click_mine(driver):
     disabled_seen = False
 
     while time.time() < end_time:
+        if is_cancel_requested():
+            return False
 
         if encounter_detected(
             driver
@@ -607,6 +720,8 @@ def wait_for_mining_result(driver):
     )
 
     while time.time() < end_time:
+        if is_cancel_requested():
+            return False
 
         if encounter_detected(
             driver
@@ -743,6 +858,8 @@ def click_mining_continue(driver):
     )
 
     while time.time() < end_time:
+        if is_cancel_requested():
+            return False
 
         for by, selector in selectors:
 
@@ -784,6 +901,8 @@ def click_mining_continue(driver):
                             )
 
                             while time.time() < ready_end:
+                                if is_cancel_requested():
+                                    return False
 
                                 if (
                                     find_mine_button(
@@ -984,7 +1103,6 @@ def handle_mining_encounter(
 def get_positive_integer(prompt):
 
     while True:
-
         try:
 
             value = int(
@@ -1143,226 +1261,74 @@ def print_mining_results(
     )
 
     print()
-    print(
-        "=" * 60
-    )
-    print(
-        "MINING COMPLETE"
-    )
-    print(
-        "=" * 60
-    )
-    print()
+    print(_miner_box_top())
+    print(_miner_row(f"  {BOLD}{MAGENTA}MINING COMPLETE{RESET}"))
+    print(_miner_box_mid())
+    print(_miner_row(f"  {GRAY}Mining mode:{RESET}     {WHITE}{mode_description}{RESET}"))
+    print(_miner_row(f"  {GRAY}Mines completed:{RESET} {WHITE}{stats['mines']:,}{RESET}"))
+    print(_miner_row(f"  {GRAY}Time elapsed:{RESET}    {WHITE}{format_duration(elapsed)}{RESET}"))
+    status = "Yes" if stats["area_completed"] else "No"
+    status_color = GREEN if stats["area_completed"] else YELLOW
+    print(_miner_row(f"  {GRAY}Area completed:{RESET}  {status_color}{status}{RESET}"))
 
-    print(
-        f"Mining mode       : {mode_description}"
-    )
-
-    print(
-        f"Mines completed   : {stats['mines']}"
+    sections = (
+        ("RESOURCES GATHERED", stats["resources"], lambda name: name),
+        ("ITEMS OBTAINED", stats["items"], lambda name: name),
+        ("ROCKS FOUND", stats["rocks"], lambda name: f"{name} rocks"),
     )
 
-    print(
-        f"Time elapsed      : {format_duration(elapsed)}"
-    )
+    for title, values, label in sections:
+        print(_miner_box_mid())
+        print(_miner_row(f"  {BOLD}{CYAN}{title}{RESET}"))
+        if values:
+            for name, amount in sorted(values.items()):
+                print(_miner_row(f"  {GRAY}{label(name) + ':':<25}{RESET} {WHITE}{amount:,}{RESET}"))
+        else:
+            print(_miner_row(f"  {GRAY}None{RESET}"))
 
-    print(
-        f"Area completed    : "
-        f"{'Yes' if stats['area_completed'] else 'No'}"
-    )
-
-    print()
-
-    # --------------------------------------------------------
-    # Resources
-    # --------------------------------------------------------
-
-    print(
-        "RESOURCES GATHERED"
-    )
-
-    print(
-        "-" * 60
-    )
-
-    if stats["resources"]:
-
-        for name, amount in sorted(
-            stats["resources"].items()
-        ):
-
-            print(
-                f"{name:<25}: {amount:,}"
-            )
-
-    else:
-
-        print(
-            "None"
-        )
-
-    print()
-
-    # --------------------------------------------------------
-    # Items
-    # --------------------------------------------------------
-
-    print(
-        "ITEMS OBTAINED"
-    )
-
-    print(
-        "-" * 60
-    )
-
-    if stats["items"]:
-
-        for name, amount in sorted(
-            stats["items"].items()
-        ):
-
-            print(
-                f"{name:<25}: {amount:,}"
-            )
-
-    else:
-
-        print(
-            "None"
-        )
-
-    print()
-
-    # --------------------------------------------------------
-    # Rocks
-    # --------------------------------------------------------
-
-    print(
-        "ROCKS FOUND"
-    )
-
-    print(
-        "-" * 60
-    )
-
-    if stats["rocks"]:
-
-        for name, amount in sorted(
-            stats["rocks"].items()
-        ):
-
-            print(
-                f"{name + ' rocks':<25}: {amount:,}"
-            )
-
-    else:
-
-        print(
-            "None"
-        )
-
-    print()
-
-    # --------------------------------------------------------
-    # XP
-    # --------------------------------------------------------
-
-    print(
-        "EXPERIENCE"
-    )
-
-    print(
-        "-" * 60
-    )
-
-    print(
-        f"{'Mining XP':<25}: "
-        f"{stats['mining_xp']:,}"
-    )
-
-    print(
-        f"{'Pickaxe XP':<25}: "
-        f"{stats['pickaxe_xp']:,.2f}"
-    )
-
-    print()
-
-    # --------------------------------------------------------
-    # Pokémon
-    # --------------------------------------------------------
-
-    print(
-        "POKÉMON"
-    )
-
-    print(
-        "-" * 60
-    )
-
-    print(
-        f"{'Encounters':<25}: "
-        f"{stats['encounters']:,}"
-    )
-
-    print(
-        f"{'Captured':<25}: "
-        f"{stats['captured']:,}"
-    )
-
-    print(
-        f"{'Capture failures':<25}: "
-        f"{stats['capture_failed']:,}"
-    )
-
-    print()
-
-    print(
-        "=" * 60
-    )
+    print(_miner_box_mid())
+    print(_miner_row(f"  {BOLD}{CYAN}EXPERIENCE{RESET}"))
+    print(_miner_row(f"  {GRAY}{'Mining XP:':<25}{RESET} {WHITE}{stats['mining_xp']:,}{RESET}"))
+    print(_miner_row(f"  {GRAY}{'Pickaxe XP:':<25}{RESET} {WHITE}{stats['pickaxe_xp']:,.2f}{RESET}"))
+    print(_miner_box_mid())
+    print(_miner_row(f"  {BOLD}{CYAN}POKÉMON{RESET}"))
+    print(_miner_row(f"  {GRAY}{'Encounters:':<25}{RESET} {WHITE}{stats['encounters']:,}{RESET}"))
+    print(_miner_row(f"  {GRAY}{'Captured:':<25}{RESET} {WHITE}{stats['captured']:,}{RESET}"))
+    print(_miner_row(f"  {GRAY}{'Capture failures:':<25}{RESET} {WHITE}{stats['capture_failed']:,}{RESET}"))
+    print(_miner_box_bottom())
 
 
 # ============================================================
 # MINER MODE
 # ============================================================
 
-def miner_mode(driver):
+def miner_mode(
+    driver,
+    queued_duration_seconds=None,
+    queued_catch_pokemon=True,
+    area=None,
+    resource_target=None,
+):
 
     print()
-    print(
-        "=" * 60
-    )
-    print(
-        "A-MINER"
-    )
-    print(
-        "=" * 60
-    )
-
-    print()
-    print(
-        "1. Mine and catch Pokémon"
-    )
-    print(
-        "2. Mine only"
-    )
-    print(
-        "3. Mine a specific amount"
-    )
-    print(
-        "4. Mine for a specific amount of time"
-    )
-    print(
-        "5. Mine until area is completed"
-    )
-    print(
-        "6. Back"
-    )
-
+    print(_miner_box_top())
+    print(_miner_row(f"  {BOLD}{MAGENTA}A-MINER{RESET}"))
+    print(_miner_box_mid())
+    print(_miner_row(f"  {YELLOW}[1]{RESET} {WHITE}Mine and catch Pokémon{RESET}"))
+    print(_miner_row(f"  {YELLOW}[2]{RESET} {WHITE}Mine only{RESET}"))
+    print(_miner_row(f"  {YELLOW}[3]{RESET} {WHITE}Mine a specific amount{RESET}"))
+    print(_miner_row(f"  {YELLOW}[4]{RESET} {WHITE}Mine for a specific amount of time{RESET}"))
+    print(_miner_row(f"  {YELLOW}[5]{RESET} {WHITE}Mine until area is completed{RESET}"))
+    print(_miner_row(f"  {YELLOW}[6]{RESET} {GRAY}Back{RESET}"))
+    print(_miner_box_bottom())
     print()
 
-    mode = input(
-        "Choose: "
-    ).strip()
+    if queued_duration_seconds is not None:
+        mode = "1" if queued_catch_pokemon else "2"
+    else:
+        mode = input(
+            f"{BOLD}{CYAN}❯ Choose an option:{RESET} "
+        ).strip()
 
     if mode == "6":
         return
@@ -1405,10 +1371,16 @@ def miner_mode(driver):
             f"{target_mines:,} mines"
         )
 
+    elif queued_duration_seconds is not None:
+        target_seconds = queued_duration_seconds
+        mode_description = (
+            "Queued timed mining"
+            + (" + Pokémon" if catch_pokemon else "")
+        )
+
     elif mode == "4":
 
         while True:
-
             duration_text = input(
                 "\nHow long would you like to mine? "
                 "(examples: 30s, 5m, 2h, 1h 30m): "
@@ -1477,6 +1449,9 @@ def miner_mode(driver):
 
         return
 
+    if area is not None and not select_mining_area(driver, area):
+        print("✗ Requested mining area was not found; continuing in current area.")
+
     stats = create_mining_stats()
 
     print()
@@ -1519,7 +1494,24 @@ def miner_mode(driver):
     # Main mining loop.
     # --------------------------------------------------------
 
+    cancelled = False
+
     while True:
+        if is_cancel_requested():
+            print(
+                "\n⚠ Mining cancelled. "
+                "Finishing the current result summary."
+            )
+            cancelled = True
+            break
+
+        if mining_needs_attention(driver):
+            print("⚠ Mining page requires inventory/healing attention; stopping safely.")
+            break
+
+        if mining_resource_target_reached(stats, resource_target):
+            print("✓ Mining resource target reached.")
+            break
 
         # ----------------------------------------------------
         # Time limit.
@@ -1684,6 +1676,14 @@ def miner_mode(driver):
             driver
         )
 
+        cancel_after_result = is_cancel_requested()
+        if cancel_after_result:
+            cancelled = True
+            print(
+                "\n⚠ Cancellation requested. "
+                "Processing the current mining result..."
+            )
+
         # ----------------------------------------------------
         # Parse #M_Result.
         # ----------------------------------------------------
@@ -1713,6 +1713,9 @@ def miner_mode(driver):
 
                 break
 
+            if cancel_after_result:
+                break
+
             continue
 
         # ----------------------------------------------------
@@ -1734,6 +1737,9 @@ def miner_mode(driver):
         print(
             "  ✓ Mining result processed."
         )
+
+        if cancel_after_result:
+            break
 
         # ----------------------------------------------------
         # Check if break mode is due
@@ -1758,5 +1764,5 @@ def miner_mode(driver):
 
     print_mining_results(
         stats,
-        mode_description,
+        mode_description + (" (cancelled)" if cancelled else ""),
     )

@@ -157,23 +157,26 @@ def wait_for_document_ready(
             WebDriverWait
         )
 
+        from cancellation import is_cancel_requested
+
+        def document_ready_or_cancelled(d):
+            if is_cancel_requested():
+                return True
+            return d.execute_script(
+                "return document.readyState"
+            ) in ("interactive", "complete")
+
         WebDriverWait(
             driver,
-            timeout
-        ).until(
-            lambda d:
-            d.execute_script(
-                "return document.readyState"
-            )
-            in (
-                "interactive",
-                "complete"
-            )
-        )
+            timeout,
+            poll_frequency=0.2,
+        ).until(document_ready_or_cancelled)
 
     except Exception:
 
         pass
+
+    return not is_cancel_requested()
 
 
 # ============================================================

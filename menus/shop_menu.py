@@ -1,15 +1,14 @@
 """
 Shop menu for Eclipse RPG Automation.
 
-Handles Item Shop placeholder and Buy Pokémon marketplace queries.
+Handles the Item Shop and Buy Pokémon marketplace queries.
 """
 
-import os
-import sys
-import platform
 import time
 import re
 import requests
+from _item_shop import _item_shop as item_shop_menu
+from _item_shop import _moon_shop as moon_shop_menu
 
 from buy_pokemon import (
     PokemonShop,
@@ -71,27 +70,6 @@ def _build_session_from_driver(driver):
         )
 
     return session
-
-
-def _item_shop():
-    w = 56
-    def _drow(content):
-        vlen = len(_strip_ansi(content))
-        pad = max(0, w - vlen)
-        return f"{BORDER_COLOR}│{RESET}{content}{' ' * pad}{BORDER_COLOR}│{RESET}"
-
-    print()
-    print(f"{BORDER_COLOR}╭{'─' * w}╮{RESET}")
-    print(_drow(f"  {YELLOW}✦ FEATURE IN DEVELOPMENT ✦{RESET}"))
-    print(f"{BORDER_COLOR}├{'─' * w}┤{RESET}")
-    print(_drow(f"  Section: {BOLD}{WHITE}Item Shop & Market{RESET}"))
-    print(_drow(""))
-    print(_drow(f"  {GRAY}Item Shop automation has not been implemented yet.{RESET}"))
-    print(_drow(f"  {GRAY}Requires HTML evidence of /item_shop in Ideas.md.{RESET}"))
-    print(f"{BORDER_COLOR}╰{'─' * w}╯{RESET}")
-    print()
-
-    input(f"{GRAY}Press Enter to return to the shop menu...{RESET}")
 
 
 def _prompt_pokemon_type():
@@ -225,24 +203,27 @@ def shop_menu(driver):
         print(_row(f"  {BOLD}{MAGENTA}🛒  SHOPS & MARKETPLACE{RESET}", w))
         print(mid_border)
         print(_row("", w))
-        print(_row(f"    {KEY_COLOR}[ 1]{RESET} {NAME_COLOR}Item Shop{RESET}        {DESC_COLOR}— Poké Balls, potions & stones (WIP){RESET}", w))
-        print(_row(f"    {KEY_COLOR}[ 2]{RESET} {NAME_COLOR}Buy Pokémon{RESET}      {DESC_COLOR}— Search & purchase Pokémon from player market{RESET}", w))
+        print(_row(f"    {KEY_COLOR}[ 1]{RESET} {NAME_COLOR}Item Shop{RESET}        {DESC_COLOR}— Poké Balls, potions & stones{RESET}", w))
+        print(_row(f"    {KEY_COLOR}[ 2]{RESET} {NAME_COLOR}Moon Shop{RESET}         {DESC_COLOR}— Rare Pokémon for Moon Points{RESET}", w))
+        print(_row(f"    {KEY_COLOR}[ 3]{RESET} {NAME_COLOR}Buy Pokémon{RESET}      {DESC_COLOR}— Search & purchase Pokémon from player market{RESET}", w))
         print(_row("", w))
-        print(_row(f"    {RED}{BOLD}[ 3]{RESET} {RED}Back{RESET}             {DESC_COLOR}— Return to main menu{RESET}", w))
+        print(_row(f"    {RED}{BOLD}[ 4]{RESET} {RED}Back{RESET}             {DESC_COLOR}— Return to main menu{RESET}", w))
         print(_row("", w))
         print(bot_border)
 
         try:
-            choice = input(f"\n{BOLD}{CYAN}❯ Select Option {GRAY}[1-3]{CYAN}:{RESET} ").strip()
+            choice = input(f"\n{BOLD}{CYAN}❯ Select Option {GRAY}[1-4]{CYAN}:{RESET} ").strip()
         except (KeyboardInterrupt, EOFError):
             break
 
         if choice == "1":
-            _item_shop()
+            item_shop_menu(driver)
         elif choice == "2":
-            _buy_pokemon_menu(driver)
+            moon_shop_menu(driver)
         elif choice == "3":
+            _buy_pokemon_menu(driver)
+        elif choice == "4":
             return
         else:
-            print(f"\n{RED}✗ Invalid choice '{choice}'. Please choose 1-3.{RESET}")
+            print(f"\n{RED}✗ Invalid choice '{choice}'. Please choose 1-4.{RESET}")
             time.sleep(1.0)

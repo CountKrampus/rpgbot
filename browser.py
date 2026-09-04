@@ -89,6 +89,7 @@ SUPPORTED_BROWSERS = (
     "brave",
     "chrome",
     "chromium",
+    "headless",
 )
 
 AUTO_DETECT_ORDER = (
@@ -102,6 +103,7 @@ BROWSER_LABELS = {
     "brave": "Brave Browser",
     "chrome": "Google Chrome",
     "chromium": "Chromium",
+    "headless": "Headless Test Driver",
 }
 
 BROWSER_WHICH_NAMES = {
@@ -456,6 +458,9 @@ def find_browser_executable(browser_name):
     if name == "auto":
         return None
 
+    if name == "headless":
+        return None
+
     for path in candidate_paths(name):
 
         try:
@@ -514,6 +519,9 @@ def resolve_browser(
         )
 
     installed = detect_installed_browsers()
+
+    if requested_name == "headless":
+        return "headless", None
 
     if requested_name == "auto":
 
@@ -1493,6 +1501,10 @@ class BrowserManager:
         tab so the current game page is restored afterward.
         """
 
+        if getattr(driver, "title", "") == "Headless Mode":
+            _success("Headless driver is available.")
+            return True
+
         results = list(
             environment_diagnostics()
         )
@@ -1672,10 +1684,15 @@ class BrowserManager:
                     f"{attempt}/{STARTUP_RETRIES}"
                 )
 
-                driver = _create_driver(
-                    profile_path,
-                    binary_path,
-                )
+                if selected_name == "headless":
+                    from headless_mode import create_headless_driver
+
+                    driver = create_headless_driver(instance_name)
+                else:
+                    driver = _create_driver(
+                        profile_path,
+                        binary_path,
+                    )
 
                 time.sleep(
                     1

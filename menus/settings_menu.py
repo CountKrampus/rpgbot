@@ -88,6 +88,12 @@ from browser import (
     set_browser_name,
 )
 
+from cancellation import (
+    get_cancel_key,
+    get_cancel_status,
+    set_cancel_key,
+)
+
 
 # ============================================================
 # CONSOLE INITIALIZATION
@@ -798,6 +804,15 @@ def _system_settings():
             ),
         )
 
+        _setting(
+            "Cancel hotkey",
+            get_cancel_key(),
+        )
+        _setting(
+            "Cancel status",
+            get_cancel_status(),
+        )
+
         _blank_row()
 
         _option(
@@ -822,6 +837,11 @@ def _system_settings():
 
         _option(
             "5",
+            "Set cancellation hotkey",
+        )
+
+        _option(
+            "6",
             "Back",
         )
 
@@ -1021,7 +1041,24 @@ def _system_settings():
             )
 
         elif choice == "5":
+            key = input(
+                f"\n{KEY_COLOR}Cancellation key "
+                f"(one letter or number, currently "
+                f"{get_cancel_key()}):{RESET} "
+            ).strip()
 
+            if set_cancel_key(key):
+                print(
+                    f"{GREEN}✓ Cancellation hotkey set to "
+                    f"{get_cancel_key()}.{RESET}"
+                )
+            else:
+                print(
+                    f"{RED}✗ Enter exactly one letter or number."
+                    f"{RESET}"
+                )
+
+        elif choice == "6":
             _pause(
                 "Press Enter to return to settings..."
             )
@@ -1972,11 +2009,16 @@ def _browser_settings(driver=None):
 
             _option(
                 "4",
-                "Auto Detect",
+                "Headless Test Driver",
             )
 
             _option(
                 "5",
+                "Auto Detect",
+            )
+
+            _option(
+                "6",
                 "Back",
             )
 
@@ -1990,7 +2032,8 @@ def _browser_settings(driver=None):
                 "1": "brave",
                 "2": "chrome",
                 "3": "chromium",
-                "4": "auto",
+                "4": "headless",
+                "5": "auto",
             }
 
             if browser_choice in mapping:
@@ -2002,7 +2045,7 @@ def _browser_settings(driver=None):
                     f"{BROWSER_LABELS[selected]}.{RESET}"
                 )
 
-            elif browser_choice == "5":
+            elif browser_choice == "6":
 
                 continue
 
@@ -2200,6 +2243,18 @@ def settings_menu(driver):
 
         _option(
             "11",
+            "Export Settings",
+            "write a portable JSON copy",
+        )
+
+        _option(
+            "12",
+            "Import Settings",
+            "load a JSON copy",
+        )
+
+        _option(
+            "13",
             "Back",
         )
 
@@ -2250,6 +2305,32 @@ def settings_menu(driver):
             _reset_settings()
 
         elif choice == "11":
+            path = input(
+                f"\n{KEY_COLOR}Export path (blank to cancel):{RESET} "
+            ).strip()
+            if path:
+                message = (
+                    "Settings exported."
+                    if settings.export_settings(path)
+                    else "Could not export settings."
+                )
+                _success(message) if "exported" in message else _error(message)
+                _pause("Press Enter to return to settings...")
+
+        elif choice == "12":
+            path = input(
+                f"\n{KEY_COLOR}Import path (blank to cancel):{RESET} "
+            ).strip()
+            if path:
+                message = (
+                    "Settings imported."
+                    if settings.import_settings(path)
+                    else "Could not import settings."
+                )
+                _success(message) if "imported" in message else _error(message)
+                _pause("Press Enter to return to settings...")
+
+        elif choice == "13":
 
             return
 

@@ -11,6 +11,7 @@ from utils import (
     safe_click,
     normalize,
 )
+from cancellation import is_cancel_requested
 
 
 # ============================================================
@@ -18,6 +19,10 @@ from utils import (
 # ============================================================
 
 WAIT_LONG = 20
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+GREEN = "\033[92m"
 
 
 # ============================================================
@@ -100,7 +105,7 @@ def set_skip_shiny_encounters(skip):
 # TIMING SETTINGS (Phase 3)
 # ============================================================
 
-_ball_selection_delay = 500  # milliseconds
+_ball_selection_delay = 300  # milliseconds
 
 
 def get_ball_selection_delay():
@@ -194,7 +199,7 @@ def wait_for_document_ready(driver, timeout=WAIT_LONG):
         except Exception:
             pass
 
-        time.sleep(0.2)
+        time.sleep(0.1)
 
     return False
 
@@ -273,10 +278,16 @@ def find_item_action(driver):
         (
             By.XPATH,
             "//*[self::a or self::button or self::input]"
+            "[normalize-space(.)='Item' or normalize-space(@value)='Item']"
+        ),
+
+        (
+            By.XPATH,
+            "//*[self::a or self::button or self::input]"
             "[contains(translate(normalize-space(.),"
             "'ABCDEFGHIJKLMNOPQRSTUVWXYZ',"
             "'abcdefghijklmnopqrstuvwxyz'),"
-            "'item')]"
+            "'item') and contains(@href, 'battle')]"
         ),
 
     ]
@@ -291,7 +302,7 @@ def find_item_action(driver):
 def click_item(driver):
 
     print(
-        "  Looking for Item..."
+        "  Looking for battle Item action..."
     )
 
     item = find_item_action(
@@ -307,7 +318,7 @@ def click_item(driver):
         return False
 
     print(
-        "  ✓ Item action found."
+        "  ✓ Battle Item action found."
     )
 
     try:
@@ -318,7 +329,7 @@ def click_item(driver):
         ):
 
             print(
-                "  ✓ Item clicked."
+                "  ✓ Battle Item menu opened."
             )
 
             return True
@@ -785,6 +796,9 @@ def capture_succeeded(driver):
         success_phrases = [
             "was caught",
             "was captured",
+            "successfully caught",
+            "successfully captured",
+            "caught a",
             "you have obtained",
             "pokemon obtained",
             "has been sent to your box",
@@ -835,6 +849,31 @@ def capture_failed(driver):
         pass
 
     return False
+
+
+def print_capture_diagnostics(driver, reason):
+    """Print bounded page-state context when a capture cannot continue."""
+    try:
+        current_url = driver.current_url
+    except WebDriverException:
+        current_url = "<unavailable>"
+
+    try:
+        body_text = normalize(
+            driver.find_element(
+                By.TAG_NAME,
+                "body",
+            ).text
+        )
+    except (WebDriverException, StaleElementReferenceException):
+        body_text = "<unavailable>"
+
+    if len(body_text) > 500:
+        body_text = f"{body_text[:500]}..."
+
+    print(f"  Capture diagnostics ({reason}):")
+    print(f"    URL: {current_url}")
+    print(f"    Page text: {body_text}")
 
 
 # ============================================================
@@ -915,12 +954,7 @@ def click_use_another(driver):
                 "  ✓ Use Another clicked."
             )
 
-            time.sleep(
-                random.uniform(
-                    0.5,
-                    1.0
-                )
-            )
+            time.sleep(0.1)
 
             return True
 
@@ -945,6 +979,11 @@ def find_capture_continue(driver):
         (
             By.XPATH,
             "//button[normalize-space()='Continue']"
+        ),
+
+        (
+            By.CSS_SELECTOR,
+            "button.enterclass[onclick*='legendary_areas']"
         ),
 
         (
@@ -1064,10 +1103,25 @@ def click_capture_continue(driver):
                         f"{onclick}"
                     )
 
-                if safe_click(
+                clicked = safe_click(
                     driver,
                     button
-                ):
+                )
+
+                if not clicked:
+                    # Eclipse sometimes replaces the result controls while
+                    # Selenium is between the lookup and ActionChains click.
+                    # Retry the same, already-validated button directly.
+                    try:
+                        driver.execute_script(
+                            "arguments[0].click();",
+                            button,
+                        )
+                        clicked = True
+                    except WebDriverException:
+                        clicked = False
+
+                if clicked:
 
                     print(
                         "  ✓ Continue clicked."
@@ -1111,7 +1165,7 @@ def click_capture_continue(driver):
 
                             pass
 
-                        time.sleep(0.3)
+                        time.sleep(0.1)
 
                     return True
 
@@ -1225,6 +1279,10 @@ def capture_attempt(driver):
                 "  ⚠ Battle page changed unexpectedly "
                 "during capture."
             )
+            print_capture_diagnostics(
+                driver,
+                "unexpected navigation",
+            )
 
             return False
 
@@ -1233,8 +1291,45 @@ def capture_attempt(driver):
     print(
         "  ⚠ Capture result timed out."
     )
+    print_capture_diagnostics(
+        driver,
+        "result timeout",
+    )
 
     return False
+
+
+def finish_capture_success(driver):
+    """Record a successful capture and return to the search page."""
+    print(
+        f"\n{GREEN}╭{'─' * 56}╮{RESET}"
+    )
+    print(
+        f"{GREEN}│{RESET}  {BOLD}{GREEN}★ POKÉMON CAPTURED! ★{RESET}"
+        f"{' ' * 29}{GREEN}│{RESET}"
+    )
+    print(
+        f"{GREEN}╰{'─' * 56}╯{RESET}"
+    )
+
+    _capture_stats["captured"] += 1
+
+    print(
+        "  Continuing back to search..."
+    )
+
+    if not click_capture_continue(
+        driver
+    ):
+        print(
+            "  ✗ Could not click capture Continue."
+        )
+        return False
+
+    print(
+        "  ✓ Returned to search."
+    )
+    return True
 
 
 # ============================================================
@@ -1251,49 +1346,52 @@ def capture_encounter(driver):
 
     _capture_stats["encounters"] += 1
 
-    max_attempts = 300
+    max_attempts = _capture_retry_limit
 
     for attempt in range(
         1,
         max_attempts + 1
     ):
-
         print()
         print(
             f"  Capture attempt #{attempt}"
         )
+
+        # A failed throw can finish navigating to Battle Results just
+        # after Use Another is clicked. Check for that race before
+        # opening the next battle Item menu.
+        if attempt > 1 and capture_succeeded(
+            driver
+        ):
+            return finish_capture_success(
+                driver
+            )
 
         success = capture_attempt(
             driver
         )
 
         if success:
-
-            print(
-                "  ✓ Capture successful."
-            )
-
-            _capture_stats["captured"] += 1
-
-            print(
-                "  Continuing back to search..."
-            )
-
-            if not click_capture_continue(
+            return finish_capture_success(
                 driver
-            ):
-
-                print(
-                    "  ✗ Could not click capture Continue."
-                )
-
-                return False
-
-            print(
-                "  ✓ Returned to search."
             )
 
-            return True
+        # The result may have arrived while click_item was waiting for
+        # the next battle action. Do not classify a completed capture as
+        # another failed attempt.
+        if capture_succeeded(
+            driver
+        ):
+            return finish_capture_success(
+                driver
+            )
+
+        if is_cancel_requested():
+            print(
+                "  ⚠ Cancellation requested. "
+                "Not starting another capture attempt."
+            )
+            break
 
         # ----------------------------------------------------
         # Capture failed.
@@ -1330,9 +1428,7 @@ def capture_encounter(driver):
                 "  ✓ Preparing another capture attempt..."
             )
 
-            time.sleep(
-                1.0
-            )
+            time.sleep(0.4)
 
             continue
 

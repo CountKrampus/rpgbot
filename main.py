@@ -54,7 +54,7 @@ def main():
 
         initialize_break_timer()
 
-        main_menu(driver)
+        main_menu(driver, account)
 
     except KeyboardInterrupt:
 
