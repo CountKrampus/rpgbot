@@ -47,6 +47,9 @@ def main():
         # Load browser preference from settings (defaults to "auto" if not set)
         loaded_settings = settings.load_settings()
         browser_choice = loaded_settings.get("browser_name", "auto")
+        
+        # On Termux, if user explicitly chose headless or android-cdp, respect that
+        # Only override auto/brave/chrome/chromium
         if PlatformDetector.is_termux() and browser_choice in (
             "auto",
             "brave",
@@ -57,7 +60,7 @@ def main():
         
         driver = BrowserManager.create(
             account,
-            browser_name=browser_choice,
+            browser=browser_choice,
         )
 
         if not login(
@@ -117,3 +120,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+# Debug: Print what browser was selected
+import sys
