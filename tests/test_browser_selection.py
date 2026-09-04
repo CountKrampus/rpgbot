@@ -58,6 +58,20 @@ class TestFindBrowserExecutable(unittest.TestCase):
                 browser.find_browser_executable("brave")
             )
 
+    def test_find_chromedriver_uses_environment_path(self):
+        with TemporaryDirectory() as tmp:
+            driver = Path(tmp) / "chromedriver.exe"
+            driver.write_bytes(b"")
+            with patch.dict(
+                os.environ,
+                {"CHROMEDRIVER": str(driver)},
+                clear=False,
+            ):
+                self.assertEqual(
+                    browser.find_chromedriver(),
+                    driver,
+                )
+
 
 class TestResolveBrowser(unittest.TestCase):
 

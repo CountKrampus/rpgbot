@@ -1183,9 +1183,27 @@ def _create_driver(
     # START BROWSER
     # --------------------------------------------------------
 
-    driver = webdriver.Chrome(
-        options=options
-    )
+    driver_path = find_chromedriver()
+    try:
+        if driver_path is None:
+            driver = webdriver.Chrome(
+                options=options
+            )
+        else:
+            from selenium.webdriver.chrome.service import Service
+
+            driver = webdriver.Chrome(
+                service=Service(str(driver_path)),
+                options=options,
+            )
+    except WebDriverException as error:
+        if driver_path is None:
+            raise RuntimeError(
+                "ChromeDriver was not found for Chromium. "
+                "Install a ChromeDriver matching Chromium, add it "
+                "to PATH, or set the CHROMEDRIVER environment variable."
+            ) from error
+        raise
 
     driver.set_page_load_timeout(
         PAGE_LOAD_TIMEOUT
@@ -1568,6 +1586,35 @@ def _print_diagnostic_report(results):
     print()
 
     return all_ok
+
+
+def find_chromedriver():
+    configured = os.environ.get("CHROMEDRIVER")
+    candidates = []
+
+    if configured:
+        candidates.append(Path(configured))
+
+    on_path = shutil.which("chromedriver")
+    if on_path:
+        candidates.append(Path(on_path))
+
+    candidates.extend(
+        [
+            Path(sys.executable).parent / "chromedriver.exe",
+            BASE_DIR / "chromedriver.exe",
+            Path(r"C:\WebDriver\bin\chromedriver.exe"),
+        ]
+    )
+
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+
+    return None
 
 
 def _free_local_port():
