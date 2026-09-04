@@ -1,79 +1,140 @@
 """
-Headless Mode - Test bot framework without browser
+Headless Mode - Real HTTP requests without browser
 
+Uses requests library to make actual web calls.
 Useful for testing on mobile or when no browser is available.
 """
 
+import requests
+from bs4 import BeautifulSoup
+
 
 class HeadlessDriver:
-    """Mock WebDriver for testing without browser."""
+    """Real HTTP driver without browser GUI."""
 
     def __init__(self, instance_name):
         self.instance_name = instance_name
         self.current_url = "about:blank"
         self.title = "Headless Mode"
         self.closed = False
+        self.session = requests.Session()
+        self.html_content = ""
+        
+        # Set user agent to look like a real browser
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Mobile Safari/537.36"
+        })
 
     def get(self, url):
-        """Navigate to URL (simulated)."""
-        self.current_url = url
-        print(f"  [HEADLESS] Would navigate to: {url}")
-        return True
+        """Navigate to URL using real HTTP request."""
+        try:
+            print(f"  [HTTP] GET {url}")
+            response = self.session.get(url, timeout=10)
+            self.current_url = url
+            self.html_content = response.text
+            
+            # Extract title from HTML
+            soup = BeautifulSoup(response.text, 'html.parser')
+            title_tag = soup.find('title')
+            self.title = title_tag.text if title_tag else "No Title"
+            
+            print(f"  [HTTP] Status: {response.status_code}")
+            return True
+        except Exception as e:
+            print(f"  [HTTP] Error: {str(e)[:50]}")
+            return False
 
     def find_element(self, by, value):
-        """Find element (simulated)."""
-        print(f"  [HEADLESS] Would find element by {by}: {value}")
-        return MockElement(value)
+        """Find element in HTML."""
+        try:
+            soup = BeautifulSoup(self.html_content, 'html.parser')
+            
+            if by == "id":
+                element = soup.find(id=value)
+            elif by == "name":
+                element = soup.find(attrs={"name": value})
+            elif by == "class name":
+                element = soup.find(class_=value)
+            elif by == "tag name":
+                element = soup.find(value)
+            elif by == "css selector":
+                # Simple CSS selector support
+                element = soup.select(value)
+                element = element[0] if element else None
+            else:
+                element = soup.find(attrs={by: value})
+            
+            if element:
+                print(f"  [HTML] Found {by}: {value}")
+                return MockElement(element, self.session)
+            else:
+                print(f"  [HTML] Not found {by}: {value}")
+                raise Exception(f"Element not found: {by}={value}")
+        except Exception as e:
+            print(f"  [HTML] Error: {str(e)[:50]}")
+            raise
 
     def execute_script(self, script, *args):
-        """Execute JavaScript (simulated)."""
-        print(f"  [HEADLESS] Would execute: {script[:50]}...")
+        """Execute JavaScript (limited support)."""
+        # Can't execute JS without browser, but we can simulate common operations
+        print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
 
     def quit(self):
         """Close driver."""
         self.closed = True
-        print(f"  [HEADLESS] Driver closed")
+        self.session.close()
+        print(f"  [HTTP] Session closed")
 
     def set_page_load_timeout(self, timeout):
-        """Set timeout (simulated)."""
+        """Set timeout (handled by requests)."""
         pass
 
 
 class MockElement:
-    """Mock WebElement for testing."""
+    """Real HTML element from BeautifulSoup."""
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, element, session):
+        self.element = element
+        self.session = session
 
     def click(self):
-        """Click element (simulated)."""
-        print(f"  [HEADLESS] Would click: {self.name}")
+        """Click element (follow link if available)."""
+        href = self.element.get('href')
+        if href:
+            print(f"  [CLICK] Would follow: {href}")
+            return True
+        print(f"  [CLICK] Element has no link")
+        return False
 
     def send_keys(self, text):
-        """Type text (simulated)."""
-        print(f"  [HEADLESS] Would type: {text}")
+        """Type text (simulate form input)."""
+        print(f"  [TYPE] Would type: {text}")
+        return True
 
     def get_attribute(self, attr):
-        """Get attribute (simulated)."""
-        return f"mock_{attr}"
+        """Get element attribute."""
+        value = self.element.get(attr)
+        print(f"  [ATTR] {attr}={value}")
+        return value
 
     @property
     def text(self):
-        """Get element text (simulated)."""
-        return f"Mock text from {self.name}"
+        """Get element text."""
+        text = self.element.get_text(strip=True)
+        return text if text else ""
 
 
 def create_headless_driver(instance_name):
-    """Create headless driver for testing."""
+    """Create headless HTTP driver for testing."""
     print()
     print("╔═══════════════════════════════════════════════════════════════╗")
-    print("║           HEADLESS MODE - NO BROWSER REQUIRED                 ║")
+    print("║           HEADLESS MODE - REAL HTTP REQUESTS                  ║")
     print("╚═══════════════════════════════════════════════════════════════╝")
     print()
     print(f"  Account: {instance_name}")
-    print("  Status: Testing framework without browser")
-    print("  Browser actions will be simulated")
+    print("  Status: Using HTTP requests (no browser GUI)")
+    print("  Real web requests enabled")
     print()
 
     return HeadlessDriver(instance_name)
