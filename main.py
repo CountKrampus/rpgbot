@@ -3,6 +3,7 @@ from browser import BrowserManager, release_instance_lock
 from login import login
 from menus.main_menu import main_menu
 import settings
+from platform_detection import PlatformDetector
 from break_timer import initialize_break_timer
 
 
@@ -11,6 +12,10 @@ def main():
     account = None
 
     try:
+
+        settings.apply_settings(
+            settings.load_settings()
+        )
 
         account = account_selector()
 
@@ -38,10 +43,17 @@ def main():
         # Load browser preference from settings (defaults to "auto" if not set)
         loaded_settings = settings.load_settings()
         browser_choice = loaded_settings.get("browser_name", "auto")
+        if PlatformDetector.is_termux() and browser_choice in (
+            "auto",
+            "brave",
+            "chrome",
+            "chromium",
+        ):
+            browser_choice = "termux"
         
         driver = BrowserManager.create(
             account,
-            browser=browser_choice,
+            browser_name=browser_choice,
         )
 
         if not login(
@@ -56,13 +68,9 @@ def main():
 
             return
 
-        settings.apply_settings(
-            settings.load_settings()
-        )
-
         initialize_break_timer()
 
-        main_menu(driver)
+        main_menu(driver, account)
 
     except KeyboardInterrupt:
 

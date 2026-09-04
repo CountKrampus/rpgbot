@@ -260,8 +260,9 @@ Option B: Device Chrome via Network (Same Wi-Fi)
 Option C: Termux Chromium (Local)
 ─────────────────────────────────
 1. Install Termux
-2. pkg install chromium
-3. RPGBot uses: BrowserManager.create(account, browser="termux")
+2. pkg install tur-repo
+3. pkg install chromium
+4. RPGBot uses: BrowserManager.create(account, browser="termux")
 
 TROUBLESHOOTING
 ───────────────────────────────────────────────────────────────
@@ -282,4 +283,3 @@ A: • Verify forward command succeeded
 
 ═══════════════════════════════════════════════════════════════
 """
-

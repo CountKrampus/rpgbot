@@ -21,8 +21,10 @@ from menus.settings_menu import settings_menu
 from menus.pokemon_menu import pokemon_menu
 from menus.collection_menu import collection_menu
 from menus.update_menu_unfinished import update_menu
+from queue_mode import queue_mode
 from account import account_menu
 from break_timer import get_break_settings, get_session_elapsed_time
+from cancellation import automation_task
 
 
 # ============================================================
@@ -245,6 +247,15 @@ def _render_menu():
         )
     )
 
+    print(
+    _row(
+        f"    {KEY_COLOR}[ 5]{RESET} "
+        f"{NAME_COLOR}Queue{RESET}        "
+        f"{DESC_COLOR}— Train, search and run tasks in sequence{RESET}",
+        w
+    )
+    )
+
     print(_row("", w))
 
     # ========================================================
@@ -260,7 +271,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[ 5]{RESET} "
+            f"    {KEY_COLOR}[ 6]{RESET} "
             f"{NAME_COLOR}Messages{RESET}     "
             f"{DESC_COLOR}— Private message inbox, reader & bulk cleanup{RESET}",
             w
@@ -269,7 +280,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[ 6]{RESET} "
+            f"    {KEY_COLOR}[ 7]{RESET} "
             f"{NAME_COLOR}Shops{RESET}        "
             f"{DESC_COLOR}— Pokemon market search, filters & auto-purchase{RESET}",
             w
@@ -278,7 +289,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[ 7]{RESET} "
+            f"    {KEY_COLOR}[ 8]{RESET} "
             f"{NAME_COLOR}Pokemon{RESET}      "
             f"{DESC_COLOR}— PC Box organizer, party inspector & checklist{RESET}",
             w
@@ -287,7 +298,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[ 8]{RESET} "
+            f"    {KEY_COLOR}[ 9]{RESET} "
             f"{NAME_COLOR}Collections{RESET}  "
             f"{DESC_COLOR}— Manual Pokemon collection logs & quantity tracking{RESET}",
             w
@@ -296,7 +307,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[ 9]{RESET} "
+            f"    {KEY_COLOR}[10]{RESET} "
             f"{NAME_COLOR}Account{RESET}      "
             f"{DESC_COLOR}— Profile statistics, keyring & account switch{RESET}",
             w
@@ -318,7 +329,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[10]{RESET} "
+            f"    {KEY_COLOR}[11]{RESET} "
             f"{NAME_COLOR}Update Center{RESET}    "
             f"{DESC_COLOR}— Map crawler, database updater & cache tools{RESET}",
             w
@@ -327,7 +338,7 @@ def _render_menu():
 
     print(
         _row(
-            f"    {KEY_COLOR}[11]{RESET} "
+            f"    {KEY_COLOR}[12]{RESET} "
             f"{NAME_COLOR}Settings{RESET}     "
             f"{DESC_COLOR}— Delays, Poké Ball priority order & break timer{RESET}",
             w
@@ -412,7 +423,7 @@ def _not_yet_implemented(section_name):
     )
 
 
-def main_menu(driver):
+def main_menu(driver, account=None):
 
     while True:
 
@@ -421,7 +432,7 @@ def main_menu(driver):
         try:
             choice = input(
                 f"{BOLD}{CYAN}❯ Select Option "
-                f"{GRAY}[0-11]"
+                f"{GRAY}[0-12]"
                 f"{CYAN}:{RESET} "
             ).strip()
 
@@ -433,66 +444,77 @@ def main_menu(driver):
         # TRAINING
         # ----------------------------------------------------
         if choice == "1":
-            training_menu(driver)
+            with automation_task():
+                training_menu(driver)
 
         # ----------------------------------------------------
         # SEARCHING
         # ----------------------------------------------------
         elif choice == "2":
-            search_menu(driver)
+            with automation_task():
+                search_menu(driver)
 
         # ----------------------------------------------------
         # A-MINER
         # ----------------------------------------------------
         elif choice == "3":
-            miner_mode(driver)
+            with automation_task():
+                miner_mode(driver)
 
         # ----------------------------------------------------
         # TRADING
         # ----------------------------------------------------
         elif choice == "4":
-            trade_mode(driver)
+            with automation_task():
+                trade_mode(driver)
+
+        # ----------------------------------------------------
+        # QUEUED AUTOMATION
+        # ----------------------------------------------------
+        elif choice == "5":
+            with automation_task():
+                queue_mode(driver)
 
         # ----------------------------------------------------
         # MESSAGES
         # ----------------------------------------------------
-        elif choice == "5":
+        elif choice == "6":
             messages_menu(driver)
 
         # ----------------------------------------------------
         # SHOPS
         # ----------------------------------------------------
-        elif choice == "6":
+        elif choice == "7":
             shop_menu(driver)
 
         # ----------------------------------------------------
         # POKEMON
         # ----------------------------------------------------
-        elif choice == "7":
+        elif choice == "8":
             pokemon_menu(driver)
 
         # ----------------------------------------------------
         # COLLECTIONS
         # ----------------------------------------------------
-        elif choice == "8":
-            collection_menu(driver)
+        elif choice == "9":
+            collection_menu(driver, account)
 
         # ----------------------------------------------------
         # ACCOUNT
         # ----------------------------------------------------
-        elif choice == "9":
+        elif choice == "10":
             account_menu(driver)
 
         # ----------------------------------------------------
         # UPDATE CENTER
         # ----------------------------------------------------
-        elif choice == "10":
+        elif choice == "11":
             update_menu(driver)
 
         # ----------------------------------------------------
         # SETTINGS
         # ----------------------------------------------------
-        elif choice == "11":
+        elif choice == "12":
             settings_menu(driver)
 
         # ----------------------------------------------------
@@ -513,7 +535,7 @@ def main_menu(driver):
             print()
             print(
                 f"{RED}✗ Invalid choice '{choice}'. "
-                f"Please select a number between 0 and 11."
+                f"Please select a number between 0 and 12."
                 f"{RESET}"
             )
             time.sleep(1.2)

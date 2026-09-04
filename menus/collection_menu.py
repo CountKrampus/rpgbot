@@ -1,61 +1,60 @@
 """
-Manual Pokémon Collection Log Manager for Eclipse RPG.
+Manual Pokémon Collection Tracker for Eclipse RPG.
 
-This module is intentionally 100% manual.
+IMPORTANT:
+    This module is intentionally completely independent of the Eclipse
+    Pokémon master database.
 
-Users can:
-    - Create named collection logs
-    - Select a collection log
-    - Rename collection logs
-    - Delete collection logs
-    - Add Pokémon to a selected collection
-    - Edit Pokémon quantity / variant
-    - Remove Pokémon from a collection
-    - View only Pokémon belonging to the selected collection
-    - Search the selected collection
-    - View missing Pokémon
-    - View collection statistics
+    It does NOT:
+        - Query the `pokemon` table
+        - Use pokemon_id
+        - Use map_id
+        - Use species_param
+        - Use dexed
+        - Use icon_name
+        - Use Selenium/browser automation
+        - Automatically detect Pokémon
 
-Collection entry data is intentionally limited to:
+Every Pokémon name and variant is entered manually by the user.
 
-    Pokémon
-    Variant
-    Quantity
+Database:
+    eclipse_maps.db
 
-No Selenium, browser automation, automatic detection, automatic
-collection updates, or individual-Pokémon tracking is performed here.
+Collection tables created/used by this module:
+    collection_logs
+    pokemon_collection
 """
 
 import os
-import sys
-import platform
 import sqlite3
-import re
-import time
+import csv
+import json
+from datetime import datetime, timezone
+
+from box import fetch_all_box_pokemon
 
 
-# ============================================================
+# ============================================================================
 # DATABASE
-# ============================================================
+# ============================================================================
 
-DB_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "eclipse_maps.db"
-)
+DB_PATH = "eclipse_maps.db"
 
 
 def _connect():
-    """Open the shared Eclipse RPG SQLite database."""
-    return sqlite3.connect(DB_FILE)
+    """Open the collection database connection."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
 def _initialize_database():
     """
-    Create the collection tables if they do not already exist.
+    Create only the tables required by the manual collection tracker.
 
-    Existing database tables are not modified.
+    This function deliberately does not inspect, alter, or depend on the
+    existing `pokemon` table.
     """
-
     conn = _connect()
 
     try:
@@ -69,13 +68,29 @@ def _initialize_database():
             )
             """
         )
+        # Older installations predate box metadata.  Keep their rows intact
+        # while allowing live-box imports to retain a box label.
+        columns = {
+            row[1]
+            for row in conn.execute(
+                "PRAGMA table_info(pokemon_collection)"
+            ).fetchall()
+        }
+        if "box" not in columns:
+            conn.execute(
+                "ALTER TABLE pokemon_collection ADD COLUMN box TEXT"
+            )
+        if "obtained_at" not in columns:
+            conn.execute(
+                "ALTER TABLE pokemon_collection ADD COLUMN obtained_at TEXT"
+            )
 
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS pokemon_collection (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 collection_id INTEGER NOT NULL,
-                pokemon_id INTEGER NOT NULL,
+                pokemon TEXT NOT NULL,
                 variant TEXT NOT NULL DEFAULT 'Default',
                 quantity INTEGER NOT NULL DEFAULT 1,
 
@@ -85,7 +100,7 @@ def _initialize_database():
 
                 UNIQUE(
                     collection_id,
-                    pokemon_id,
+                    pokemon,
                     variant
                 )
             )
@@ -98,200 +113,76 @@ def _initialize_database():
         conn.close()
 
 
-# ============================================================
-# CONSOLE & COLOR SETUP
-# ============================================================
+# ============================================================================
+# USER / ACCOUNT
+# ============================================================================
 
-def _init_console():
+def _get_user_id(user_id=None):
     """
-    Ensure UTF-8 encoding and ANSI color support on Windows.
+    Resolve the account/user identifier.
+
+    main.py passes the account object/string into the menu. This helper keeps
+    the collection system compatible with the existing menu structure without
+    requiring a specific account class.
     """
+    if user_id is not None:
+        if isinstance(user_id, str):
+            return user_id
 
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
+        for attr in ("username", "name", "account", "user_name"):
+            value = getattr(user_id, attr, None)
 
-    if platform.system() == "Windows":
-        try:
-            import ctypes
+            if value:
+                return str(value)
 
-            kernel32 = ctypes.windll.kernel32
+        return str(user_id)
 
-            mode = ctypes.c_ulong()
-            h_out = kernel32.GetStdHandle(-11)
-
-            if kernel32.GetConsoleMode(
-                h_out,
-                ctypes.byref(mode)
-            ):
-                kernel32.SetConsoleMode(
-                    h_out,
-                    mode.value | 0x0004
-                )
-
-        except Exception:
-            pass
-
-        os.system("")
+    return os.environ.get("RPGBOT_USER_ID", "default")
 
 
-_init_console()
-
-
-# ============================================================
-# ANSI & STYLING
-# ============================================================
-
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-ITALIC = "\033[3m"
-
-CYAN = "\033[96m"
-BLUE = "\033[94m"
-MAGENTA = "\033[95m"
-PURPLE = "\033[38;5;141m"
-YELLOW = "\033[93m"
-GREEN = "\033[92m"
-RED = "\033[91m"
-WHITE = "\033[97m"
-GRAY = "\033[90m"
-GOLD = "\033[38;5;220m"
-
-BORDER_COLOR = PURPLE
-CATEGORY_COLOR = f"{BOLD}{CYAN}"
-KEY_COLOR = f"{BOLD}{YELLOW}"
-NAME_COLOR = f"{BOLD}{WHITE}"
-DESC_COLOR = GRAY
-
-ANSI_STRIP_REGEX = re.compile(
-    r"\x1b\[[0-9;]*[mK]"
-)
-
-
-def _strip_ansi(text: str) -> str:
-    """Strip ANSI escape sequences for visible-length calculations."""
-    return ANSI_STRIP_REGEX.sub("", text)
-
-
-def _row(content: str, width: int = 71) -> str:
-    """Create a correctly padded ANSI-aware box row."""
-
-    visible_length = len(
-        _strip_ansi(content)
-    )
-
-    padding = max(
-        0,
-        width - visible_length
-    )
-
-    return (
-        f"{BORDER_COLOR}║{RESET}"
-        f"{content}"
-        f"{' ' * padding}"
-        f"{BORDER_COLOR}║{RESET}"
-    )
-
-
-def _borders(width: int = 71):
-    """Return the standard collection menu borders."""
-
-    return (
-        f"{BORDER_COLOR}╔{'═' * width}╗{RESET}",
-        f"{BORDER_COLOR}╠{'═' * width}╣{RESET}",
-        f"{BORDER_COLOR}╚{'═' * width}╝{RESET}",
-    )
-
-
-# ============================================================
-# USER ID
-# ============================================================
-
-def _get_user_id():
-    """
-    Determine the current RPGBot account/user identifier.
-
-    The collection system accepts a user identifier supplied by
-    the caller. When none is available, the local account name
-    can be supplied through the environment.
-
-    The main menu can later pass the actual selected account
-    directly without changing this module's database structure.
-    """
-
-    value = os.environ.get(
-        "RPGBOT_USER_ID"
-    )
-
-    if value:
-        return str(value)
-
-    return "default"
-
-
-# ============================================================
-# COLLECTION LOG DATABASE FUNCTIONS
-# ============================================================
+# ============================================================================
+# COLLECTION DATABASE OPERATIONS
+# ============================================================================
 
 def _get_collections(user_id):
-    """Return all collection logs belonging to the user."""
-
     conn = _connect()
 
     try:
-        return conn.execute(
+        rows = conn.execute(
             """
-            SELECT
-                id,
-                name
+            SELECT id, name
             FROM collection_logs
             WHERE user_id = ?
             ORDER BY name COLLATE NOCASE
             """,
-            (str(user_id),)
+            (user_id,),
         ).fetchall()
+
+        return rows
 
     finally:
         conn.close()
 
 
-def _get_collection(
-    collection_id,
-    user_id
-):
-    """Return one collection only if it belongs to the user."""
-
+def _get_collection(collection_id, user_id):
     conn = _connect()
 
     try:
         return conn.execute(
             """
-            SELECT
-                id,
-                name
+            SELECT id, name
             FROM collection_logs
             WHERE id = ?
               AND user_id = ?
             """,
-            (
-                collection_id,
-                str(user_id)
-            )
+            (collection_id, user_id),
         ).fetchone()
 
     finally:
         conn.close()
 
 
-def _create_collection(
-    user_id,
-    name
-):
-    """Create a new collection log."""
-
+def _create_collection(user_id, name):
     name = name.strip()
 
     if not name:
@@ -302,39 +193,23 @@ def _create_collection(
     try:
         conn.execute(
             """
-            INSERT INTO collection_logs (
-                user_id,
-                name
-            )
+            INSERT INTO collection_logs (user_id, name)
             VALUES (?, ?)
             """,
-            (
-                str(user_id),
-                name
-            )
+            (user_id, name),
         )
 
         conn.commit()
-
-        return True, "Collection created successfully."
+        return True, f"Collection '{name}' created."
 
     except sqlite3.IntegrityError:
-        return (
-            False,
-            "You already have a collection with that name."
-        )
+        return False, f"A collection named '{name}' already exists."
 
     finally:
         conn.close()
 
 
-def _rename_collection(
-    collection_id,
-    user_id,
-    new_name
-):
-    """Rename a user's collection."""
-
+def _rename_collection(collection_id, user_id, new_name):
     new_name = new_name.strip()
 
     if not new_name:
@@ -350,308 +225,182 @@ def _rename_collection(
             WHERE id = ?
               AND user_id = ?
             """,
-            (
-                new_name,
-                collection_id,
-                str(user_id)
-            )
+            (new_name, collection_id, user_id),
         )
-
-        conn.commit()
 
         if cursor.rowcount == 0:
-            return False, "Collection could not be found."
+            return False, "Collection not found."
 
-        return True, "Collection renamed successfully."
+        conn.commit()
+        return True, f"Collection renamed to '{new_name}'."
 
     except sqlite3.IntegrityError:
-        return (
-            False,
-            "You already have a collection with that name."
-        )
+        return False, f"A collection named '{new_name}' already exists."
 
     finally:
         conn.close()
 
 
-def _delete_collection(
-    collection_id,
-    user_id
-):
-    """
-    Delete a collection and all Pokémon entries belonging to it.
-    """
+def _delete_collection(collection_id, user_id):
+    collection = _get_collection(collection_id, user_id)
+
+    if not collection:
+        return False, "Collection not found."
 
     conn = _connect()
 
     try:
         conn.execute(
             """
-            DELETE FROM pokemon_collection
-            WHERE collection_id = ?
-            """,
-            (collection_id,)
-        )
-
-        cursor = conn.execute(
-            """
             DELETE FROM collection_logs
             WHERE id = ?
               AND user_id = ?
             """,
-            (
-                collection_id,
-                str(user_id)
-            )
+            (collection_id, user_id),
         )
 
         conn.commit()
 
-        return cursor.rowcount > 0
+        return True, f"Collection '{collection[1]}' deleted."
 
     finally:
         conn.close()
 
 
-# ============================================================
-# POKÉMON DATABASE FUNCTIONS
-# ============================================================
+# ============================================================================
+# COLLECTION ENTRY DATABASE OPERATIONS
+# ============================================================================
 
-def _search_master_pokemon(query):
-    """
-    Search the existing Pokémon database.
-
-    The collection system never changes the master Pokémon data.
-    """
-
-    query = query.strip()
-
-    if not query:
-        return []
-
+def _get_collection_entries(collection_id, search=None, box=None, include_box=False):
     conn = _connect()
 
     try:
-        rows = conn.execute(
-            """
-            SELECT
-                id,
-                name,
-                species_param
-            FROM pokemon
-            ORDER BY name COLLATE NOCASE
-            """
+        clauses = ["collection_id = ?"]
+        params = [collection_id]
+        if search:
+            search_term = f"%{search}%"
+            clauses.append(
+                "(pokemon LIKE ? COLLATE NOCASE OR variant LIKE ? COLLATE NOCASE)"
+            )
+            params.extend([search_term, search_term])
+        if box:
+            clauses.append("COALESCE(box, 'Unassigned') = ? COLLATE NOCASE")
+            params.append(str(box).strip())
+        return conn.execute(
+            f"""
+            SELECT id, pokemon, variant, quantity
+                   {", box, obtained_at" if include_box else ""}
+            FROM pokemon_collection
+            WHERE {' AND '.join(clauses)}
+            ORDER BY pokemon COLLATE NOCASE, variant COLLATE NOCASE
+            """,
+            params,
         ).fetchall()
-
-    except sqlite3.Error:
-        return []
 
     finally:
         conn.close()
 
-    wanted = re.sub(
-        r"[^a-z0-9]+",
-        "",
-        query.lower()
-    )
 
-    results = []
-
-    for pokemon_id, name, species_param in rows:
-
-        normalized_name = re.sub(
-            r"[^a-z0-9]+",
-            "",
-            str(name or "").lower()
-        )
-
-        normalized_species = re.sub(
-            r"[^a-z0-9]+",
-            "",
-            str(species_param or "").lower()
-        )
-
-        if (
-            wanted in normalized_name
-            or wanted in normalized_species
-        ):
-            results.append(
-                {
-                    "id": pokemon_id,
-                    "name": name,
-                    "species": species_param
-                }
-            )
-
-    return results
-
-
-def _get_pokemon_by_id(pokemon_id):
-    """Return master Pokémon information."""
-
+def _get_collection_entry(entry_id, collection_id):
     conn = _connect()
 
     try:
         return conn.execute(
             """
-            SELECT
-                id,
-                name,
-                species_param
-            FROM pokemon
+            SELECT id, pokemon, variant, quantity
+            FROM pokemon_collection
             WHERE id = ?
+              AND collection_id = ?
             """,
-            (pokemon_id,)
+            (entry_id, collection_id),
         ).fetchone()
 
     finally:
         conn.close()
 
 
-# ============================================================
-# COLLECTION ENTRY FUNCTIONS
-# ============================================================
-
-def _get_collection_entries(
-    collection_id,
-    search=None
-):
-    """
-    Return ONLY Pokémon belonging to the selected collection.
-    """
-
-    conn = _connect()
-
-    try:
-
-        if search:
-
-            wanted = f"%{search.lower()}%"
-
-            return conn.execute(
-                """
-                SELECT
-                    pc.id,
-                    pc.pokemon_id,
-                    p.name,
-                    pc.variant,
-                    pc.quantity
-                FROM pokemon_collection pc
-                JOIN pokemon p
-                    ON p.id = pc.pokemon_id
-                WHERE pc.collection_id = ?
-                  AND (
-                      LOWER(p.name) LIKE ?
-                      OR LOWER(pc.variant) LIKE ?
-                  )
-                ORDER BY
-                    p.name COLLATE NOCASE,
-                    pc.variant COLLATE NOCASE
-                """,
-                (
-                    collection_id,
-                    wanted,
-                    wanted
-                )
-            ).fetchall()
-
-        return conn.execute(
-            """
-            SELECT
-                pc.id,
-                pc.pokemon_id,
-                p.name,
-                pc.variant,
-                pc.quantity
-            FROM pokemon_collection pc
-            JOIN pokemon p
-                ON p.id = pc.pokemon_id
-            WHERE pc.collection_id = ?
-            ORDER BY
-                p.name COLLATE NOCASE,
-                pc.variant COLLATE NOCASE
-            """,
-            (collection_id,)
-        ).fetchall()
-
-    finally:
-        conn.close()
-
-
-def _add_collection_entry(
-    collection_id,
-    pokemon_id,
-    variant,
-    quantity
-):
-    """Manually add Pokémon to a collection."""
-
+def _add_collection_entry(collection_id, pokemon, variant, quantity, box=None):
+    pokemon = pokemon.strip()
     variant = variant.strip() or "Default"
+
+    if not pokemon:
+        return False, "Pokémon name cannot be empty."
+
+    if quantity < 1:
+        return False, "Quantity must be at least 1."
 
     conn = _connect()
 
     try:
         existing = conn.execute(
             """
-            SELECT
-                id,
-                quantity
+            SELECT id, quantity
             FROM pokemon_collection
             WHERE collection_id = ?
-              AND pokemon_id = ?
+              AND pokemon = ?
               AND variant = ?
             """,
             (
                 collection_id,
-                pokemon_id,
-                variant
-            )
+                pokemon,
+                variant,
+            ),
         ).fetchone()
 
         if existing:
-
-            new_quantity = (
-                existing[1] + quantity
-            )
+            new_quantity = existing[1] + quantity
 
             conn.execute(
                 """
                 UPDATE pokemon_collection
-                SET quantity = ?
+                SET quantity = ?,
+                    box = COALESCE(box, ?)
                 WHERE id = ?
+                  AND collection_id = ?
                 """,
                 (
                     new_quantity,
-                    existing[0]
-                )
+                    str(box).strip() if box else None,
+                    existing[0],
+                    collection_id,
+                ),
             )
 
-        else:
+            conn.commit()
 
-            conn.execute(
-                """
-                INSERT INTO pokemon_collection (
-                    collection_id,
-                    pokemon_id,
-                    variant,
-                    quantity
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    collection_id,
-                    pokemon_id,
-                    variant,
-                    quantity
-                )
+            return (
+                True,
+                f"Updated {pokemon} [{variant}] to {new_quantity}.",
             )
+
+        conn.execute(
+            """
+            INSERT INTO pokemon_collection (
+                collection_id,
+                pokemon,
+                variant,
+                quantity,
+                box
+                , obtained_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                collection_id,
+                pokemon,
+                variant,
+                quantity,
+                str(box).strip() if box else None,
+                datetime.now(timezone.utc).isoformat() if box else None,
+            ),
+        )
 
         conn.commit()
 
-        return True
-
-    except sqlite3.IntegrityError:
-        return False
+        return (
+            True,
+            f"Added {pokemon} [{variant}] x{quantity}.",
+        )
 
     finally:
         conn.close()
@@ -660,54 +409,95 @@ def _add_collection_entry(
 def _update_collection_entry(
     entry_id,
     collection_id,
+    pokemon,
     variant,
-    quantity
+    quantity,
 ):
-    """Manually update a collection entry."""
-
+    pokemon = pokemon.strip()
     variant = variant.strip() or "Default"
+
+    if not pokemon:
+        return False, "Pokémon name cannot be empty."
+
+    if quantity < 1:
+        return False, "Quantity must be at least 1."
 
     conn = _connect()
 
     try:
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM pokemon_collection
+            WHERE collection_id = ?
+              AND pokemon = ?
+              AND variant = ?
+              AND id != ?
+            """,
+            (
+                collection_id,
+                pokemon,
+                variant,
+                entry_id,
+            ),
+        ).fetchone()
+
+        if duplicate:
+            return (
+                False,
+                "That Pokémon and variant already exist in this collection.",
+            )
+
         cursor = conn.execute(
             """
             UPDATE pokemon_collection
-            SET
+            SET pokemon = ?,
                 variant = ?,
                 quantity = ?
             WHERE id = ?
               AND collection_id = ?
             """,
             (
+                pokemon,
                 variant,
                 quantity,
                 entry_id,
-                collection_id
-            )
+                collection_id,
+            ),
         )
+
+        if cursor.rowcount == 0:
+            return False, "Collection entry not found."
 
         conn.commit()
 
-        return cursor.rowcount > 0
-
-    except sqlite3.IntegrityError:
-        return False
+        return True, f"{pokemon} [{variant}] updated."
 
     finally:
         conn.close()
 
 
-def _remove_collection_entry(
-    entry_id,
-    collection_id
-):
-    """Remove one Pokémon entry from the selected collection."""
-
+def _remove_collection_entry(entry_id, collection_id):
     conn = _connect()
 
     try:
-        cursor = conn.execute(
+        entry = conn.execute(
+            """
+            SELECT pokemon, variant
+            FROM pokemon_collection
+            WHERE id = ?
+              AND collection_id = ?
+            """,
+            (
+                entry_id,
+                collection_id,
+            ),
+        ).fetchone()
+
+        if not entry:
+            return False, "Collection entry not found."
+
+        conn.execute(
             """
             DELETE FROM pokemon_collection
             WHERE id = ?
@@ -715,1575 +505,1505 @@ def _remove_collection_entry(
             """,
             (
                 entry_id,
-                collection_id
-            )
+                collection_id,
+            ),
         )
 
         conn.commit()
 
-        return cursor.rowcount > 0
+        return (
+            True,
+            f"Removed {entry[0]} [{entry[1]}].",
+        )
 
     finally:
         conn.close()
 
 
 def _get_collection_totals(collection_id):
-    """Return entry count and total Pokémon quantity."""
-
     conn = _connect()
 
     try:
-        row = conn.execute(
+        total_quantity = conn.execute(
             """
-            SELECT
-                COUNT(*),
-                COALESCE(SUM(quantity), 0),
-                COUNT(DISTINCT pokemon_id)
+            SELECT COALESCE(SUM(quantity), 0)
             FROM pokemon_collection
             WHERE collection_id = ?
             """,
-            (collection_id,)
-        ).fetchone()
+            (collection_id,),
+        ).fetchone()[0]
 
-        return {
-            "entries": row[0],
-            "quantity": row[1],
-            "species": row[2]
-        }
+        unique_pokemon = conn.execute(
+            """
+            SELECT COUNT(DISTINCT LOWER(pokemon))
+            FROM pokemon_collection
+            WHERE collection_id = ?
+            """,
+            (collection_id,),
+        ).fetchone()[0]
+
+        total_entries = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM pokemon_collection
+            WHERE collection_id = ?
+            """,
+            (collection_id,),
+        ).fetchone()[0]
+
+        return (
+            unique_pokemon,
+            total_quantity,
+            total_entries,
+        )
 
     finally:
         conn.close()
 
 
-# ============================================================
-# MENU HELPERS
-# ============================================================
+# ============================================================================
+# TERMINAL STYLING
+# ============================================================================
 
-def _pause(message="Press Enter to continue..."):
-    input(
-        f"\n{GRAY}{message}{RESET}"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+BLUE = "\033[94m"
+MAGENTA = "\033[95m"
+CYAN = "\033[96m"
+WHITE = "\033[97m"
+
+WIDTH = 72
+
+
+def _clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def _pause():
+    print()
+    input(f"{DIM}Press ENTER to continue...{RESET}")
+
+
+def _print_header(title, subtitle=None):
+    print()
+    print(f"{CYAN}{BOLD}{'═' * WIDTH}{RESET}")
+    print(
+        f"{CYAN}{BOLD}"
+        f"{title.center(WIDTH)}"
+        f"{RESET}"
     )
+    print(f"{CYAN}{BOLD}{'═' * WIDTH}{RESET}")
 
-
-def _positive_integer(prompt):
-    """Request a positive integer."""
-
-    while True:
-
-        value = input(prompt).strip()
-
-        try:
-            value = int(value)
-
-            if value <= 0:
-                raise ValueError
-
-            return value
-
-        except ValueError:
-
-            print(
-                f"{RED}✗ Please enter a number greater than 0.{RESET}"
-            )
-
-
-def _confirm(prompt):
-    """Simple Y/N confirmation."""
-
-    answer = input(
-        f"{BOLD}{CYAN}{prompt} {GRAY}[y/n]:{RESET} "
-    ).strip().lower()
-
-    return answer in (
-        "y",
-        "yes"
-    )
-
-
-# ============================================================
-# COLLECTION LOG LIST
-# ============================================================
-
-def _render_collection_list(
-    user_id
-):
-    """Display the user's collection logs."""
-
-    w = 71
-
-    top, mid, bot = _borders(w)
-
-    collections = _get_collections(
-        user_id
-    )
+    if subtitle:
+        print(
+            f"{DIM}"
+            f"{subtitle.center(WIDTH)}"
+            f"{RESET}"
+        )
 
     print()
-    print(top)
-    print(
-        _row(
-            f"  {BOLD}{MAGENTA}📚  COLLECTION LOGS{RESET}",
-            w
+
+
+def _print_error(message):
+    print(f"{RED}{BOLD}✖ {message}{RESET}")
+
+
+def _print_success(message):
+    print(f"{GREEN}{BOLD}✔ {message}{RESET}")
+
+
+def _print_warning(message):
+    print(f"{YELLOW}{BOLD}⚠ {message}{RESET}")
+
+
+def _print_info(message):
+    print(f"{BLUE}● {message}{RESET}")
+
+
+def _print_divider():
+    print(f"{DIM}{'─' * WIDTH}{RESET}")
+
+
+def _print_menu_option(number, label, description=None):
+    if description:
+        print(
+            f"  {CYAN}{BOLD}[{number}]{RESET} "
+            f"{WHITE}{label:<24}{RESET}"
+            f"{DIM}{description}{RESET}"
         )
-    )
-    print(mid)
+    else:
+        print(
+            f"  {CYAN}{BOLD}[{number}]{RESET} "
+            f"{WHITE}{label}{RESET}"
+        )
+
+
+# ============================================================================
+# COLLECTION LIST
+# ============================================================================
+
+def _render_collection_list(user_id):
+    collections = _get_collections(user_id)
 
     if not collections:
-
         print(
-            _row(
-                f"  {YELLOW}No collection logs have been created yet.{RESET}",
-                w
-            )
+            f"{DIM}"
+            f"No collections have been created yet."
+            f"{RESET}"
+        )
+        return
+
+    for index, (_, name) in enumerate(collections, 1):
+        collection_id = collections[index - 1][0]
+        unique_pokemon, total_quantity, total_entries = (
+            _get_collection_totals(collection_id)
+        )
+        print(
+            f"  {CYAN}{BOLD}[{index}]{RESET} "
+            f"{WHITE}{name}{RESET} "
+            f"{DIM}({unique_pokemon} Pokémon, "
+            f"{total_entries} variants, "
+            f"{total_quantity} total){RESET}"
         )
 
-    else:
 
-        for index, collection in enumerate(
-            collections,
-            1
-        ):
-
-            collection_id = collection[0]
-            name = collection[1]
-
-            totals = _get_collection_totals(
-                collection_id
-            )
-
-            line = (
-                f"  {KEY_COLOR}[{index:2d}]{RESET} "
-                f"{NAME_COLOR}{name[:30]:<30}{RESET} "
-                f"{GRAY}{totals['species']} species  "
-                f"•  {totals['quantity']} total{RESET}"
-            )
-
-            print(
-                _row(line, w)
-            )
-
-    print(mid)
-
-    print(
-        _row(
-            f"  {KEY_COLOR}[N]{RESET} New Collection"
-            f"    {KEY_COLOR}[M]{RESET} Manage"
-            f"    {RED}[0]{RESET} Back",
-            w
-        )
-    )
-
-    print(bot)
-
-    return collections
-
-
-# ============================================================
+# ============================================================================
 # CREATE COLLECTION
-# ============================================================
+# ============================================================================
 
-def _create_collection_menu(
-    user_id
-):
+def _create_collection_menu(user_id):
+    _clear_screen()
+
+    _print_header(
+        "CREATE COLLECTION",
+        "Create a manual Pokémon collection log",
+    )
+
+    print(
+        f"{DIM}"
+        "Collections are completely independent of the Eclipse Pokémon database."
+        f"{RESET}"
+    )
+
     print()
-
-    print(
-        f"{CATEGORY_COLOR}Create New Collection Log{RESET}"
-    )
-
-    print(
-        f"{GRAY}Give this collection its own name. "
-        f"Examples: Main Collection, Shiny Collection, "
-        f"Trade Binder.{RESET}"
-    )
 
     name = input(
-        f"\n{BOLD}{CYAN}❯ Collection name:{RESET} "
+        f"{CYAN}Collection name:{RESET} "
     ).strip()
 
-    success, message = _create_collection(
-        user_id,
-        name
-    )
+    if not name:
+        _print_error("Collection name cannot be empty.")
+        _pause()
+        return
+
+    success, message = _create_collection(user_id, name)
+
+    print()
 
     if success:
-        print(
-            f"\n{GREEN}✓ {message}{RESET}"
-        )
+        _print_success(message)
     else:
-        print(
-            f"\n{RED}✗ {message}{RESET}"
-        )
+        _print_error(message)
 
     _pause()
 
 
-# ============================================================
-# COLLECTION MANAGEMENT
-# ============================================================
+# ============================================================================
+# MANAGE COLLECTIONS
+# ============================================================================
 
-def _manage_collections(
-    user_id
-):
+def _manage_collections(user_id):
     while True:
+        _clear_screen()
 
-        collections = _get_collections(
-            user_id
+        _print_header(
+            "MANAGE COLLECTIONS",
+            "Create, rename, or delete your collection logs",
         )
 
-        w = 71
-        top, mid, bot = _borders(w)
+        collections = _get_collections(user_id)
 
-        print()
-        print(top)
-        print(
-            _row(
-                f"  {BOLD}{MAGENTA}⚙  MANAGE COLLECTIONS{RESET}",
-                w
-            )
-        )
-        print(mid)
+        if collections:
+            print(f"{WHITE}{BOLD}YOUR COLLECTIONS{RESET}")
+            print()
 
-        if not collections:
-
-            print(
-                _row(
-                    f"  {YELLOW}No collections to manage.{RESET}",
-                    w
+            for index, (_, name) in enumerate(collections, 1):
+                collection_id = collections[index - 1][0]
+                unique_pokemon, total_quantity, total_entries = (
+                    _get_collection_totals(collection_id)
                 )
-            )
-
-            print(bot)
-            _pause()
-            return
-
-        for index, collection in enumerate(
-            collections,
-            1
-        ):
-
-            print(
-                _row(
-                    f"  {KEY_COLOR}[{index:2d}]{RESET} "
-                    f"{NAME_COLOR}{collection[1]}{RESET}",
-                    w
-                )
-            )
-
-        print(mid)
-
-        print(
-            _row(
-                f"  {KEY_COLOR}[R]{RESET} Rename Collection"
-                f"    {RED}[D]{RESET} Delete Collection"
-                f"    {RED}[0]{RESET} Back",
-                w
-            )
-        )
-
-        print(bot)
-
-        choice = input(
-            f"\n{BOLD}{CYAN}"
-            f"❯ Select Action [number/R/D/0]:"
-            f"{RESET} "
-        ).strip().lower()
-
-        if choice == "0":
-            return
-
-        if choice == "r":
-
-            selected = _select_collection(
-                user_id,
-                "Select collection to rename"
-            )
-
-            if not selected:
-                continue
-
-            collection_id, name = selected
-
-            new_name = input(
-                f"\n{BOLD}{CYAN}"
-                f"❯ New name for '{name}':"
-                f"{RESET} "
-            ).strip()
-
-            success, message = _rename_collection(
-                collection_id,
-                user_id,
-                new_name
-            )
-
-            if success:
                 print(
-                    f"{GREEN}✓ {message}{RESET}"
-                )
-            else:
-                print(
-                    f"{RED}✗ {message}{RESET}"
-                )
-
-            _pause()
-            continue
-
-        if choice == "d":
-
-            selected = _select_collection(
-                user_id,
-                "Select collection to delete"
-            )
-
-            if not selected:
-                continue
-
-            collection_id, name = selected
-
-            print(
-                f"\n{RED}{BOLD}"
-                f"WARNING: This permanently deletes "
-                f"'{name}' and all Pokémon entries inside it."
-                f"{RESET}"
-            )
-
-            if not _confirm(
-                "Delete this collection?"
-            ):
-                print(
-                    f"{YELLOW}Cancelled.{RESET}"
-                )
-                time.sleep(0.7)
-                continue
-
-            if _delete_collection(
-                collection_id,
-                user_id
-            ):
-                print(
-                    f"{GREEN}✓ Collection deleted.{RESET}"
-                )
-            else:
-                print(
-                    f"{RED}✗ Collection could not be deleted.{RESET}"
+                    f"  {CYAN}{BOLD}[{index}]{RESET} "
+                    f"{WHITE}{name}{RESET} "
+                    f"{DIM}({unique_pokemon} Pokémon, "
+                    f"{total_entries} variants, "
+                    f"{total_quantity} total){RESET}"
                 )
 
-            _pause()
-            continue
+            print()
 
-        try:
-
-            index = int(choice)
-
-            if 1 <= index <= len(collections):
-
-                collection_id = collections[
-                    index - 1
-                ][0]
-
-                _collection_menu(
-                    user_id,
-                    collection_id
-                )
-
-        except ValueError:
-            print(
-                f"{RED}✗ Invalid selection.{RESET}"
-            )
-            time.sleep(0.7)
-
-
-def _select_collection(
-    user_id,
-    title="Select Collection"
-):
-    collections = _get_collections(
-        user_id
-    )
-
-    if not collections:
-
-        print(
-            f"\n{YELLOW}No collections exist yet.{RESET}"
-        )
-
-        _pause()
-
-        return None
-
-    print(
-        f"\n{CATEGORY_COLOR}{title}:{RESET}"
-    )
-
-    for index, collection in enumerate(
-        collections,
-        1
-    ):
-
-        print(
-            f"  {KEY_COLOR}[{index:2d}]{RESET} "
-            f"{NAME_COLOR}{collection[1]}{RESET}"
-        )
-
-    print(
-        f"  {RED}[0]{RESET} Cancel"
-    )
-
-    choice = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Select Collection:"
-        f"{RESET} "
-    ).strip()
-
-    try:
-
-        index = int(choice)
-
-        if index == 0:
-            return None
-
-        if 1 <= index <= len(collections):
-
-            selected = collections[
-                index - 1
-            ]
-
-            return (
-                selected[0],
-                selected[1]
-            )
-
-    except ValueError:
-        pass
-
-    print(
-        f"{RED}✗ Invalid collection selection.{RESET}"
-    )
-
-    time.sleep(0.8)
-
-    return None
-
-
-# ============================================================
-# VIEW COLLECTION
-# ============================================================
-
-def _view_collection(
-    collection_id,
-    collection_name,
-    search=None
-):
-    """Display only entries belonging to this collection."""
-
-    entries = _get_collection_entries(
-        collection_id,
-        search
-    )
-
-    totals = _get_collection_totals(
-        collection_id
-    )
-
-    w = 71
-    top, mid, bot = _borders(w)
-
-    print()
-    print(top)
-
-    title = (
-        f"  {BOLD}{MAGENTA}📖  {collection_name[:45]}{RESET}"
-    )
-
-    print(
-        _row(title, w)
-    )
-
-    print(mid)
-
-    status = (
-        f"  {GRAY}SPECIES:{RESET} "
-        f"{CYAN}{totals['species']}{RESET}"
-        f"   {GRAY}TOTAL:{RESET} "
-        f"{CYAN}{totals['quantity']}{RESET}"
-        f"   {GRAY}ENTRIES:{RESET} "
-        f"{CYAN}{totals['entries']}{RESET}"
-    )
-
-    if search:
-        status += (
-            f"   {GRAY}SEARCH:{RESET} "
-            f"{YELLOW}{search}{RESET}"
-        )
-
-    print(
-        _row(status, w)
-    )
-
-    print(mid)
-
-    header = (
-        f"  {GRAY}"
-        f"{'#':<5}"
-        f"{'POKÉMON':<25}"
-        f"{'VARIANT':<22}"
-        f"{'QTY':<8}"
-        f"{RESET}"
-    )
-
-    print(
-        _row(header, w)
-    )
-
-    print(mid)
-
-    if not entries:
-
-        message = (
-            f"  {YELLOW}"
-            f"No Pokémon are recorded in this collection."
-            f"{RESET}"
-        )
-
-        if search:
-            message = (
-                f"  {YELLOW}"
-                f"No matches found for '{search}'."
-                f"{RESET}"
-            )
-
-        print(
-            _row(message, w)
-        )
-
-    else:
-
-        for index, entry in enumerate(
-            entries,
-            1
-        ):
-
-            entry_id = entry[0]
-            pokemon_name = entry[2]
-            variant = entry[3]
-            quantity = entry[4]
-
-            line = (
-                f"  {KEY_COLOR}[{index:3d}]{RESET} "
-                f"{WHITE}{str(pokemon_name)[:23]:<23}{RESET} "
-                f"{GOLD}{str(variant)[:20]:<20}{RESET} "
-                f"{YELLOW}{quantity:<8}{RESET}"
-            )
-
-            print(
-                _row(line, w)
-            )
-
-    print(mid)
-
-    print(
-        _row(
-            f"  {KEY_COLOR}[A]{RESET} Add"
-            f"    {KEY_COLOR}[E]{RESET} Edit"
-            f"    {KEY_COLOR}[R]{RESET} Remove"
-            f"    {KEY_COLOR}[S]{RESET} Search"
-            f"    {KEY_COLOR}[M]{RESET} Missing"
-            f"    {RED}[B]{RESET} Back",
-            w
-        )
-    )
-
-    print(bot)
-
-
-# ============================================================
-# ADD POKÉMON
-# ============================================================
-
-def _add_pokemon(
-    collection_id
-):
-    print()
-
-    print(
-        f"{CATEGORY_COLOR}Add Pokémon to Collection{RESET}"
-    )
-
-    query = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Search Pokémon:"
-        f"{RESET} "
-    ).strip()
-
-    if not query:
-        return
-
-    results = _search_master_pokemon(
-        query
-    )
-
-    if not results:
-
-        print(
-            f"\n{YELLOW}"
-            f"No Pokémon found for '{query}'."
-            f"{RESET}"
-        )
-
-        _pause()
-
-        return
-
-    if len(results) > 25:
-        results = results[:25]
-
-    print()
-
-    for index, pokemon in enumerate(
-        results,
-        1
-    ):
-
-        print(
-            f"  {KEY_COLOR}[{index:2d}]{RESET} "
-            f"{NAME_COLOR}{pokemon['name']}{RESET}"
-            f"{GRAY}"
-            f" ({pokemon['species'] or 'No species parameter'})"
-            f"{RESET}"
-        )
-
-    print(
-        f"  {RED}[0]{RESET} Cancel"
-    )
-
-    choice = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Select Pokémon:"
-        f"{RESET} "
-    ).strip()
-
-    try:
-
-        index = int(choice)
-
-        if index == 0:
-            return
-
-        if not 1 <= index <= len(results):
-            raise ValueError
-
-    except ValueError:
-
-        print(
-            f"{RED}✗ Invalid Pokémon selection.{RESET}"
-        )
-
-        time.sleep(0.8)
-
-        return
-
-    pokemon = results[
-        index - 1
-    ]
-
-    variant = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Variant {GRAY}[Default]:"
-        f"{CYAN}:{RESET} "
-    ).strip()
-
-    if not variant:
-        variant = "Default"
-
-    quantity = _positive_integer(
-        f"{BOLD}{CYAN}"
-        f"❯ Quantity:"
-        f"{RESET} "
-    )
-
-    success = _add_collection_entry(
-        collection_id,
-        pokemon["id"],
-        variant,
-        quantity
-    )
-
-    if success:
-
-        print(
-            f"\n{GREEN}✓ Added "
-            f"{quantity} × {pokemon['name']} "
-            f"({variant}) to collection.{RESET}"
-        )
-
-    else:
-
-        print(
-            f"\n{RED}"
-            f"✗ Could not add Pokémon to collection."
-            f"{RESET}"
-        )
-
-    _pause()
-
-
-# ============================================================
-# EDIT POKÉMON
-# ============================================================
-
-def _edit_pokemon(
-    collection_id
-):
-    entries = _get_collection_entries(
-        collection_id
-    )
-
-    if not entries:
-
-        print(
-            f"\n{YELLOW}"
-            f"This collection is empty."
-            f"{RESET}"
-        )
-
-        _pause()
-
-        return
-
-    print(
-        f"\n{CATEGORY_COLOR}"
-        f"Select Pokémon Entry to Edit:"
-        f"{RESET}"
-    )
-
-    for index, entry in enumerate(
-        entries,
-        1
-    ):
-
-        print(
-            f"  {KEY_COLOR}[{index:3d}]{RESET} "
-            f"{WHITE}{entry[2]}{RESET} "
-            f"{GOLD}({entry[3]}){RESET} "
-            f"{YELLOW}×{entry[4]}{RESET}"
-        )
-
-    print(
-        f"  {RED}[0]{RESET} Cancel"
-    )
-
-    choice = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Select Entry:"
-        f"{RESET} "
-    ).strip()
-
-    try:
-
-        index = int(choice)
-
-        if index == 0:
-            return
-
-        if not 1 <= index <= len(entries):
-            raise ValueError
-
-    except ValueError:
-
-        print(
-            f"{RED}✗ Invalid selection.{RESET}"
-        )
-
-        time.sleep(0.7)
-
-        return
-
-    entry = entries[
-        index - 1
-    ]
-
-    entry_id = entry[0]
-
-    new_variant = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Variant {GRAY}[{entry[3]}]:"
-        f"{CYAN}:{RESET} "
-    ).strip()
-
-    if not new_variant:
-        new_variant = entry[3]
-
-    new_quantity = _positive_integer(
-        f"{BOLD}{CYAN}"
-        f"❯ Quantity {GRAY}[{entry[4]}]:"
-        f"{CYAN}:{RESET} "
-    )
-
-    success = _update_collection_entry(
-        entry_id,
-        collection_id,
-        new_variant,
-        new_quantity
-    )
-
-    if success:
-
-        print(
-            f"\n{GREEN}"
-            f"✓ Collection entry updated."
-            f"{RESET}"
-        )
-
-    else:
-
-        print(
-            f"\n{RED}"
-            f"✗ Could not update entry."
-            f" It may create a duplicate Pokémon/variant."
-            f"{RESET}"
-        )
-
-    _pause()
-
-
-# ============================================================
-# REMOVE POKÉMON
-# ============================================================
-
-def _remove_pokemon(
-    collection_id
-):
-    entries = _get_collection_entries(
-        collection_id
-    )
-
-    if not entries:
-
-        print(
-            f"\n{YELLOW}"
-            f"This collection is empty."
-            f"{RESET}"
-        )
-
-        _pause()
-
-        return
-
-    print(
-        f"\n{CATEGORY_COLOR}"
-        f"Select Pokémon Entry to Remove:"
-        f"{RESET}"
-    )
-
-    for index, entry in enumerate(
-        entries,
-        1
-    ):
-
-        print(
-            f"  {KEY_COLOR}[{index:3d}]{RESET} "
-            f"{WHITE}{entry[2]}{RESET} "
-            f"{GOLD}({entry[3]}){RESET} "
-            f"{YELLOW}×{entry[4]}{RESET}"
-        )
-
-    print(
-        f"  {RED}[0]{RESET} Cancel"
-    )
-
-    choice = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Select Entry:"
-        f"{RESET} "
-    ).strip()
-
-    try:
-
-        index = int(choice)
-
-        if index == 0:
-            return
-
-        if not 1 <= index <= len(entries):
-            raise ValueError
-
-    except ValueError:
-
-        print(
-            f"{RED}✗ Invalid selection.{RESET}"
-        )
-
-        time.sleep(0.7)
-
-        return
-
-    entry = entries[
-        index - 1
-    ]
-
-    if not _confirm(
-        f"Remove {entry[2]} ({entry[3]}) ×{entry[4]}?"
-    ):
-        print(
-            f"{YELLOW}Cancelled.{RESET}"
-        )
-
-        time.sleep(0.6)
-
-        return
-
-    success = _remove_collection_entry(
-        entry[0],
-        collection_id
-    )
-
-    if success:
-
-        print(
-            f"{GREEN}✓ Pokémon removed from collection.{RESET}"
-        )
-
-    else:
-
-        print(
-            f"{RED}✗ Could not remove Pokémon entry.{RESET}"
-        )
-
-    _pause()
-
-
-# ============================================================
-# SEARCH
-# ============================================================
-
-def _search_collection(
-    collection_id,
-    collection_name
-):
-    query = input(
-        f"\n{BOLD}{CYAN}"
-        f"❯ Search this collection:"
-        f"{RESET} "
-    ).strip()
-
-    if not query:
-        return
-
-    _view_collection(
-        collection_id,
-        collection_name,
-        query
-    )
-
-    _pause()
-
-
-# ============================================================
-# MISSING POKÉMON
-# ============================================================
-
-def _get_master_pokemon():
-    """Return all Pokémon in the master database."""
-
-    conn = _connect()
-
-    try:
-        return conn.execute(
-            """
-            SELECT
-                id,
-                name,
-                species_param
-            FROM pokemon
-            ORDER BY
-                name COLLATE NOCASE
-            """
-        ).fetchall()
-
-    finally:
-        conn.close()
-
-
-def _get_owned_pokemon_ids(
-    collection_id
-):
-    """Return Pokémon species already represented in collection."""
-
-    conn = _connect()
-
-    try:
-        rows = conn.execute(
-            """
-            SELECT DISTINCT pokemon_id
-            FROM pokemon_collection
-            WHERE collection_id = ?
-            """,
-            (collection_id,)
-        ).fetchall()
-
-        return {
-            row[0]
-            for row in rows
-        }
-
-    finally:
-        conn.close()
-
-
-def _missing_pokemon(
-    collection_id,
-    collection_name
-):
-    """
-    Display master Pokémon not represented in this collection.
-
-    Variants are intentionally not treated as separate missing
-    species. A Pokémon is considered present once it exists in
-    the selected collection.
-    """
-
-    master = _get_master_pokemon()
-
-    if not master:
-
-        print(
-            f"\n{YELLOW}"
-            f"The master Pokémon database is empty or unavailable."
-            f"{RESET}"
-        )
-
-        _pause()
-
-        return
-
-    owned_ids = _get_owned_pokemon_ids(
-        collection_id
-    )
-
-    missing = [
-        pokemon
-        for pokemon in master
-        if pokemon[0] not in owned_ids
-    ]
-
-    w = 71
-    top, mid, bot = _borders(w)
-
-    print()
-    print(top)
-
-    print(
-        _row(
-            f"  {BOLD}{MAGENTA}"
-            f"❓  MISSING POKÉMON — {collection_name}"
-            f"{RESET}",
-            w
-        )
-    )
-
-    print(mid)
-
-    print(
-        _row(
-            f"  {GRAY}MISSING:{RESET} "
-            f"{RED}{len(missing)}{RESET}"
-            f"   {GRAY}COMPLETE:{RESET} "
-            f"{GREEN}{len(master) - len(missing)}{RESET}"
-            f"   {GRAY}TOTAL:{RESET} "
-            f"{CYAN}{len(master)}{RESET}",
-            w
-        )
-    )
-
-    print(mid)
-
-    if not missing:
-
-        print(
-            _row(
-                f"  {GREEN}"
-                f"✓ This collection contains every Pokémon "
-                f"in the master database."
-                f"{RESET}",
-                w
-            )
-        )
-
-    else:
-
-        for index, pokemon in enumerate(
-            missing,
-            1
-        ):
-
-            line = (
-                f"  {KEY_COLOR}[{index:4d}]{RESET} "
-                f"{WHITE}{str(pokemon[1])[:35]:<35}{RESET}"
-            )
-
-            print(
-                _row(line, w)
-            )
-
-    print(bot)
-
-    _pause()
-
-
-# ============================================================
-# COLLECTION STATISTICS
-# ============================================================
-
-def _collection_statistics(
-    collection_id,
-    collection_name
-):
-    totals = _get_collection_totals(
-        collection_id
-    )
-
-    master = _get_master_pokemon()
-
-    master_count = len(
-        master
-    )
-
-    species = totals[
-        "species"
-    ]
-
-    if master_count:
-        completion = (
-            species / master_count
-        ) * 100
-    else:
-        completion = 0.0
-
-    w = 71
-    top, mid, bot = _borders(w)
-
-    print()
-    print(top)
-
-    print(
-        _row(
-            f"  {BOLD}{MAGENTA}"
-            f"📊  COLLECTION STATISTICS"
-            f"{RESET}",
-            w
-        )
-    )
-
-    print(mid)
-
-    print(
-        _row(
-            f"  {GRAY}COLLECTION:{RESET} "
-            f"{NAME_COLOR}{collection_name}{RESET}",
-            w
-        )
-    )
-
-    print(mid)
-
-    stats = [
-        (
-            "Unique Pokémon",
-            str(species)
-        ),
-        (
-            "Total Quantity",
-            str(totals["quantity"])
-        ),
-        (
-            "Collection Entries",
-            str(totals["entries"])
-        ),
-        (
-            "Master Pokémon",
-            str(master_count)
-        ),
-        (
-            "Completion",
-            f"{completion:.1f}%"
-        ),
-    ]
-
-    for label, value in stats:
-
-        print(
-            _row(
-                f"  {GRAY}{label:<25}{RESET} "
-                f"{CYAN}{BOLD}{value}{RESET}",
-                w
-            )
-        )
-
-    print(bot)
-
-    _pause()
-
-
-# ============================================================
-# SELECTED COLLECTION MENU
-# ============================================================
-
-def _collection_menu(
-    user_id,
-    collection_id
-):
-    """
-    Menu for exactly one collection.
-
-    Every operation here is scoped to collection_id.
-    """
-
-    collection = _get_collection(
-        collection_id,
-        user_id
-    )
-
-    if not collection:
-        return
-
-    collection_name = collection[
-        1
-    ]
-
-    while True:
-
-        collection = _get_collection(
-            collection_id,
-            user_id
-        )
-
-        if not collection:
-            return
-
-        collection_name = collection[
-            1
-        ]
-
-        totals = _get_collection_totals(
-            collection_id
-        )
-
-        master_count = len(
-            _get_master_pokemon()
-        )
-
-        if master_count:
-            completion = (
-                totals["species"]
-                / master_count
-            ) * 100
         else:
-            completion = 0.0
+            _print_info("You currently have no collections.")
+            print()
 
-        w = 71
-        top, mid, bot = _borders(w)
+        _print_divider()
+        print()
+
+        _print_menu_option(
+            "1",
+            "Create Collection",
+            "Create a new collection",
+        )
+
+        _print_menu_option(
+            "2",
+            "Rename Collection",
+            "Rename an existing collection",
+        )
+
+        _print_menu_option(
+            "3",
+            "Delete Collection",
+            "Delete a collection and its entries",
+        )
+
+        _print_menu_option(
+            "0",
+            "Back",
+            "Return to the collection menu",
+        )
 
         print()
-        print(top)
-
-        print(
-            _row(
-                f"  {BOLD}{MAGENTA}"
-                f"📖  {collection_name[:55]}"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(mid)
-
-        hud = (
-            f"  {GRAY}POKÉMON:{RESET} "
-            f"{CYAN}{totals['species']}/{master_count}{RESET}"
-            f"   {GRAY}TOTAL:{RESET} "
-            f"{CYAN}{totals['quantity']}{RESET}"
-            f"   {GRAY}COMPLETE:{RESET} "
-            f"{GREEN}{completion:.1f}%{RESET}"
-        )
-
-        print(
-            _row(hud, w)
-        )
-
-        print(mid)
-        print(
-            _row("", w)
-        )
-
-        print(
-            _row(
-                f"  {CATEGORY_COLOR}COLLECTION{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 1]{RESET} "
-                f"{NAME_COLOR}View Collection{RESET}"
-                f"    {DESC_COLOR}"
-                f"— View only Pokémon in this log"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 2]{RESET} "
-                f"{NAME_COLOR}Add Pokémon{RESET}"
-                f"       {DESC_COLOR}"
-                f"— Manually add Pokémon, variant & quantity"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 3]{RESET} "
-                f"{NAME_COLOR}Edit Pokémon{RESET}"
-                f"      {DESC_COLOR}"
-                f"— Change variant or quantity"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 4]{RESET} "
-                f"{NAME_COLOR}Remove Pokémon{RESET}"
-                f"    {DESC_COLOR}"
-                f"— Remove an entry from this log"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 5]{RESET} "
-                f"{NAME_COLOR}Search{RESET}"
-                f"             {DESC_COLOR}"
-                f"— Search only this collection"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 6]{RESET} "
-                f"{NAME_COLOR}Missing Pokémon{RESET}"
-                f"    {DESC_COLOR}"
-                f"— Show species not in this log"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row(
-                f"    {KEY_COLOR}[ 7]{RESET} "
-                f"{NAME_COLOR}Statistics{RESET}"
-                f"          {DESC_COLOR}"
-                f"— Collection completion & totals"
-                f"{RESET}",
-                w
-            )
-        )
-
-        print(
-            _row("", w)
-        )
-
-        print(
-            _row(
-                f"    {RED}[ 0]{RESET} "
-                f"{RED}Back{RESET}",
-                w
-            )
-        )
-
-        print(bot)
 
         choice = input(
-            f"\n{BOLD}{CYAN}"
-            f"❯ Select Option [0-7]:"
-            f"{RESET} "
+            f"{CYAN}Select Option [0-3]:{RESET} "
         ).strip()
 
         if choice == "0":
             return
 
-        elif choice == "1":
+        if choice == "1":
+            _create_collection_menu(user_id)
+            continue
 
-            _view_collection(
+        if choice == "2":
+            if not collections:
+                _print_error("There are no collections to rename.")
+                _pause()
+                continue
+
+            _clear_screen()
+
+            _print_header("RENAME COLLECTION")
+
+            for index, (_, name) in enumerate(collections, 1):
+                print(
+                    f"  {CYAN}{BOLD}[{index}]{RESET} "
+                    f"{WHITE}{name}{RESET}"
+                )
+
+            print()
+
+            selection = input(
+                f"{CYAN}Select Collection:{RESET} "
+            ).strip()
+
+            try:
+                index = int(selection)
+                if index < 1 or index > len(collections):
+                    raise ValueError
+
+            except ValueError:
+                _print_error("Invalid collection selection.")
+                _pause()
+                continue
+
+            collection_id = collections[index - 1][0]
+            old_name = collections[index - 1][1]
+
+            new_name = input(
+                f"{CYAN}New name for '{old_name}':{RESET} "
+            ).strip()
+
+            success, message = _rename_collection(
                 collection_id,
-                collection_name
+                user_id,
+                new_name,
             )
+
+            print()
+
+            if success:
+                _print_success(message)
+            else:
+                _print_error(message)
 
             _pause()
+            continue
 
-        elif choice == "2":
+        if choice == "3":
+            if not collections:
+                _print_error("There are no collections to delete.")
+                _pause()
+                continue
 
-            _add_pokemon(
-                collection_id
+            _clear_screen()
+
+            _print_header("DELETE COLLECTION")
+
+            for index, (_, name) in enumerate(collections, 1):
+                print(
+                    f"  {CYAN}{BOLD}[{index}]{RESET} "
+                    f"{WHITE}{name}{RESET}"
+                )
+
+            print()
+
+            selection = input(
+                f"{CYAN}Select Collection:{RESET} "
+            ).strip()
+
+            try:
+                index = int(selection)
+
+                if index < 1 or index > len(collections):
+                    raise ValueError
+
+            except ValueError:
+                _print_error("Invalid collection selection.")
+                _pause()
+                continue
+
+            collection_id = collections[index - 1][0]
+            collection_name = collections[index - 1][1]
+
+            print()
+
+            _print_warning(
+                f"This will permanently delete '{collection_name}' "
+                "and every entry inside it."
             )
 
-        elif choice == "3":
+            confirm = input(
+                f"{YELLOW}Type DELETE to confirm:{RESET} "
+            ).strip()
 
-            _edit_pokemon(
-                collection_id
-            )
+            if confirm != "DELETE":
+                _print_info("Deletion cancelled.")
+                _pause()
+                continue
 
-        elif choice == "4":
-
-            _remove_pokemon(
-                collection_id
-            )
-
-        elif choice == "5":
-
-            _search_collection(
+            success, message = _delete_collection(
                 collection_id,
-                collection_name
+                user_id,
             )
 
-        elif choice == "6":
+            print()
 
-            _missing_pokemon(
-                collection_id,
-                collection_name
-            )
+            if success:
+                _print_success(message)
+            else:
+                _print_error(message)
 
-        elif choice == "7":
+            _pause()
+            continue
 
-            _collection_statistics(
-                collection_id,
-                collection_name
-            )
-
-        else:
-
-            print(
-                f"\n{RED}"
-                f"✗ Invalid choice. Please select 0-7."
-                f"{RESET}"
-            )
-
-            time.sleep(0.8)
+        _print_error("Invalid option.")
+        _pause()
 
 
-# ============================================================
-# MAIN COLLECTION MENU
-# ============================================================
+# ============================================================================
+# SELECT COLLECTION
+# ============================================================================
 
-def collection_menu(
-    driver=None,
-    user_id=None
-):
-    """
-    Entry point used by main_menu.py.
+def _select_collection(user_id, title="SELECT COLLECTION"):
+    collections = _get_collections(user_id)
 
-    driver is accepted for compatibility with the existing menu
-    architecture but is deliberately NOT used.
+    if not collections:
+        _clear_screen()
 
-    The collection system is completely manual.
-    """
-
-    del driver
-
-    _initialize_database()
-
-    if user_id is None:
-        user_id = _get_user_id()
-
-    while True:
-
-        collections = _render_collection_list(
-            user_id
+        _print_header(
+            "SELECT COLLECTION",
+            "Choose which collection to work with",
         )
 
-        try:
+        _print_warning(
+            "You do not have any collections yet."
+        )
 
-            choice = input(
-                f"\n{BOLD}{CYAN}"
-                f"❯ Select Collection / Action "
-                f"{GRAY}[1-{max(1, len(collections))}/N/M/0]"
-                f"{CYAN}:{RESET} "
-            ).strip().lower()
+        print()
 
-        except (KeyboardInterrupt, EOFError):
+        create = input(
+            f"{CYAN}Create one now? [Y/N]:{RESET} "
+        ).strip().lower()
 
-            print(
-                f"\n{YELLOW}"
-                f"Returning to main menu..."
-                f"{RESET}"
+        if create == "y":
+            _create_collection_menu(user_id)
+
+        return None
+
+    _clear_screen()
+
+    _print_header(
+        title,
+        "All collection operations apply only to the selected collection",
+    )
+
+    for index, (_, name) in enumerate(collections, 1):
+        print(
+            f"  {CYAN}{BOLD}[{index}]{RESET} "
+            f"{WHITE}{name}{RESET}"
+        )
+
+    print()
+    print(
+        f"  {DIM}[0] Back{RESET}"
+    )
+
+    print()
+
+    choice = input(
+        f"{CYAN}Select Collection:{RESET} "
+    ).strip()
+
+    if choice == "0":
+        return None
+
+    try:
+        index = int(choice)
+
+        if index < 1 or index > len(collections):
+            raise ValueError
+
+    except ValueError:
+        _print_error("Invalid collection selection.")
+        _pause()
+        return None
+
+    return collections[index - 1]
+
+
+# ============================================================================
+# VIEW COLLECTION
+# ============================================================================
+
+def _view_collection(collection_id, collection_name, search=None, box=None):
+    _clear_screen()
+
+    title = f"COLLECTION: {collection_name}"
+
+    if box:
+        subtitle = f"Box: {box}"
+    elif search:
+        subtitle = f"Search results for: {search}"
+    else:
+        subtitle = "Manual Pokémon collection entries"
+
+    _print_header(title, subtitle)
+
+    entries = _get_collection_entries(
+        collection_id,
+        search,
+        box,
+    )
+
+    unique_pokemon, total_quantity, total_entries = (
+        _get_collection_totals(collection_id)
+    )
+
+    print(
+        f"{CYAN}Unique Pokémon:{RESET} "
+        f"{WHITE}{unique_pokemon}{RESET}"
+        f"    "
+        f"{CYAN}Total Quantity:{RESET} "
+        f"{WHITE}{total_quantity}{RESET}"
+        f"    "
+        f"{CYAN}Entries:{RESET} "
+        f"{WHITE}{total_entries}{RESET}"
+    )
+
+    print()
+
+    if not entries:
+        if search:
+            _print_warning("No matching entries found.")
+        else:
+            _print_info(
+                "This collection is empty. "
+                "Use 'Add Pokémon' to begin tracking."
             )
 
+        return
+
+    _print_divider()
+
+    print(
+        f"{DIM}"
+        f"{'#':<5}"
+        f"{'POKÉMON':<28}"
+        f"{'VARIANT':<25}"
+        f"{'QTY':>8}"
+        f"{RESET}"
+    )
+
+    _print_divider()
+
+    for index, (_, pokemon, variant, quantity) in enumerate(
+        entries,
+        1,
+    ):
+        pokemon_display = pokemon[:26]
+        variant_display = variant[:23]
+
+        print(
+            f"{CYAN}{index:<5}{RESET}"
+            f"{WHITE}{pokemon_display:<28}{RESET}"
+            f"{MAGENTA}{variant_display:<25}{RESET}"
+            f"{YELLOW}{quantity:>8}{RESET}"
+        )
+
+    _print_divider()
+
+
+# ============================================================================
+# ADD POKÉMON
+# ============================================================================
+
+def _add_pokemon(collection_id):
+    _clear_screen()
+
+    _print_header(
+        "ADD POKÉMON",
+        "Manually add an entry to the selected collection",
+    )
+
+    print(
+        f"{DIM}"
+        "Enter the Pokémon exactly as you want it stored in your collection."
+        f"{RESET}"
+    )
+
+    print()
+
+    pokemon = input(
+        f"{CYAN}Pokémon name:{RESET} "
+    ).strip()
+
+    if not pokemon:
+        _print_error("Pokémon name cannot be empty.")
+        _pause()
+        return
+
+    variant = input(
+        f"{CYAN}Variant:{RESET} "
+    ).strip()
+
+    if not variant:
+        variant = "Default"
+
+    quantity_text = input(
+        f"{CYAN}Quantity:{RESET} "
+    ).strip()
+
+    try:
+        quantity = int(quantity_text)
+
+        if quantity < 1:
+            raise ValueError
+
+    except ValueError:
+        _print_error("Quantity must be a positive whole number.")
+        _pause()
+        return
+
+    success, message = _add_collection_entry(
+        collection_id,
+        pokemon,
+        variant,
+        quantity,
+    )
+
+    print()
+
+    if success:
+        _print_success(message)
+    else:
+        _print_error(message)
+
+    _pause()
+
+
+# ============================================================================
+# EDIT POKÉMON
+# ============================================================================
+
+def _edit_pokemon(collection_id):
+    _clear_screen()
+
+    _print_header(
+        "EDIT POKÉMON",
+        "Modify an existing manual collection entry",
+    )
+
+    entries = _get_collection_entries(collection_id)
+
+    if not entries:
+        _print_info("This collection is empty.")
+        _pause()
+        return
+
+    for index, (_, pokemon, variant, quantity) in enumerate(
+        entries,
+        1,
+    ):
+        print(
+            f"  {CYAN}{BOLD}[{index}]{RESET} "
+            f"{WHITE}{pokemon}{RESET}"
+            f" {MAGENTA}[{variant}]{RESET}"
+            f" {YELLOW}x{quantity}{RESET}"
+        )
+
+    print()
+    print(
+        f"  {DIM}[0] Cancel{RESET}"
+    )
+
+    print()
+
+    selection = input(
+        f"{CYAN}Select Entry:{RESET} "
+    ).strip()
+
+    if selection == "0":
+        return
+
+    try:
+        index = int(selection)
+
+        if index < 1 or index > len(entries):
+            raise ValueError
+
+    except ValueError:
+        _print_error("Invalid entry selection.")
+        _pause()
+        return
+
+    entry_id, old_pokemon, old_variant, old_quantity = (
+        entries[index - 1]
+    )
+
+    print()
+
+    print(
+        f"{DIM}"
+        "Press ENTER to keep the current value."
+        f"{RESET}"
+    )
+
+    print()
+
+    pokemon = input(
+        f"{CYAN}Pokémon name "
+        f"{DIM}[{old_pokemon}]{RESET}{CYAN}:{RESET} "
+    ).strip()
+
+    if not pokemon:
+        pokemon = old_pokemon
+
+    variant = input(
+        f"{CYAN}Variant "
+        f"{DIM}[{old_variant}]{RESET}{CYAN}:{RESET} "
+    ).strip()
+
+    if not variant:
+        variant = old_variant
+
+    quantity_text = input(
+        f"{CYAN}Quantity "
+        f"{DIM}[{old_quantity}]{RESET}{CYAN}:{RESET} "
+    ).strip()
+
+    if quantity_text:
+        try:
+            quantity = int(quantity_text)
+
+            if quantity < 1:
+                raise ValueError
+
+        except ValueError:
+            _print_error(
+                "Quantity must be a positive whole number."
+            )
+            _pause()
             return
+    else:
+        quantity = old_quantity
+
+    success, message = _update_collection_entry(
+        entry_id,
+        collection_id,
+        pokemon,
+        variant,
+        quantity,
+    )
+
+    print()
+
+    if success:
+        _print_success(message)
+    else:
+        _print_error(message)
+
+    _pause()
+
+
+# ============================================================================
+# REMOVE POKÉMON
+# ============================================================================
+
+def _remove_pokemon(collection_id):
+    _clear_screen()
+
+    _print_header(
+        "REMOVE POKÉMON",
+        "Remove an entry from the selected collection",
+    )
+
+    entries = _get_collection_entries(collection_id)
+
+    if not entries:
+        _print_info("This collection is empty.")
+        _pause()
+        return
+
+    for index, (_, pokemon, variant, quantity) in enumerate(
+        entries,
+        1,
+    ):
+        print(
+            f"  {CYAN}{BOLD}[{index}]{RESET} "
+            f"{WHITE}{pokemon}{RESET}"
+            f" {MAGENTA}[{variant}]{RESET}"
+            f" {YELLOW}x{quantity}{RESET}"
+        )
+
+    print()
+    print(
+        f"  {DIM}[0] Cancel{RESET}"
+    )
+
+    print()
+
+    selection = input(
+        f"{CYAN}Select Entry:{RESET} "
+    ).strip()
+
+    if selection == "0":
+        return
+
+    try:
+        index = int(selection)
+
+        if index < 1 or index > len(entries):
+            raise ValueError
+
+    except ValueError:
+        _print_error("Invalid entry selection.")
+        _pause()
+        return
+
+    entry_id, pokemon, variant, quantity = entries[index - 1]
+
+    print()
+
+    _print_warning(
+        f"Remove {pokemon} [{variant}] x{quantity}?"
+    )
+
+    confirm = input(
+        f"{YELLOW}Confirm [Y/N]:{RESET} "
+    ).strip().lower()
+
+    if confirm != "y":
+        _print_info("Removal cancelled.")
+        _pause()
+        return
+
+    success, message = _remove_collection_entry(
+        entry_id,
+        collection_id,
+    )
+
+    print()
+
+    if success:
+        _print_success(message)
+    else:
+        _print_error(message)
+
+    _pause()
+
+
+# ============================================================================
+# SEARCH
+# ============================================================================
+
+def _search_collection(collection_id, collection_name):
+    _clear_screen()
+
+    _print_header(
+        "SEARCH COLLECTION",
+        f"Search only '{collection_name}'",
+    )
+
+    print(
+        f"{DIM}"
+        "Search checks the manually entered Pokémon and Variant fields only."
+        f"{RESET}"
+    )
+
+    print()
+
+    search = input(
+        f"{CYAN}Search:{RESET} "
+    ).strip()
+
+    if not search:
+        _print_error("Search cannot be empty.")
+        _pause()
+        return
+
+    _view_collection(
+        collection_id,
+        collection_name,
+        search,
+    )
+
+    _pause()
+
+
+# ============================================================================
+# STATISTICS
+# ============================================================================
+
+def _collection_statistics(collection_id, collection_name):
+    _clear_screen()
+
+    _print_header(
+        "COLLECTION STATISTICS",
+        collection_name,
+    )
+
+    unique_pokemon, total_quantity, total_entries = (
+        _get_collection_totals(collection_id)
+    )
+
+    print(
+        f"  {CYAN}{BOLD}Unique Pokémon{RESET}"
+        f"      {WHITE}{unique_pokemon}{RESET}"
+    )
+
+    print(
+        f"  {CYAN}{BOLD}Total Quantity{RESET}"
+        f"      {YELLOW}{total_quantity}{RESET}"
+    )
+
+    print(
+        f"  {CYAN}{BOLD}Total Entries{RESET}"
+        f"       {WHITE}{total_entries}{RESET}"
+    )
+
+    print()
+
+    _print_divider()
+
+    entries = _get_collection_entries(collection_id)
+
+    if entries:
+        variant_totals = {}
+
+        for _, _, variant, quantity in entries:
+            key = variant.strip() or "Default"
+
+            variant_totals[key] = (
+                variant_totals.get(key, 0) + quantity
+            )
+
+        print()
+        print(
+            f"{WHITE}{BOLD}QUANTITY BY VARIANT{RESET}"
+        )
+        print()
+
+        for variant, quantity in sorted(
+            variant_totals.items(),
+            key=lambda item: item[0].lower(),
+        ):
+            print(
+                f"  {MAGENTA}{variant:<30}{RESET}"
+                f"{YELLOW}{quantity:>8}{RESET}"
+            )
+
+    else:
+        print()
+        _print_info("No Pokémon have been added yet.")
+
+    _pause()
+
+
+# ============================================================================
+# BOX COMPARISON AND SYNC
+# ============================================================================
+
+def _box_label(pokemon):
+    """Return stable box metadata when a scraper supplies it."""
+    value = (
+        pokemon.get("box")
+        or pokemon.get("box_number")
+        or pokemon.get("box_name")
+        or pokemon.get("page")
+    )
+    return str(value).strip() if value not in (None, "") else "Unassigned"
+
+
+def _box_collection_key(pokemon, variant):
+    normalized_variant = str(variant).strip() or "Default"
+    if normalized_variant.casefold() == "normal":
+        normalized_variant = "Default"
+
+    return (
+        str(pokemon).strip().casefold(),
+        normalized_variant.casefold(),
+    )
+
+
+def _build_box_summary(box_pokemon):
+    summary = {}
+
+    for pokemon in box_pokemon:
+        species = pokemon.get("species") or pokemon.get("name")
+        variant = pokemon.get("display_category") or pokemon.get("variant")
+
+        if not species:
+            continue
+
+        key = _box_collection_key(species, variant)
+        display_variant = str(variant).strip() or "Default"
+        if display_variant.casefold() == "normal":
+            display_variant = "Default"
+        summary[key] = {
+            "pokemon": str(species).strip(),
+            "variant": display_variant,
+            "quantity": summary.get(key, {}).get("quantity", 0) + 1,
+            "box": _box_label(pokemon),
+        }
+
+    return summary
+
+
+def _filter_box_pokemon(box_pokemon, box=None):
+    """Filter scraped box records without changing the scraper contract."""
+    if not box:
+        return list(box_pokemon or [])
+    wanted = str(box).strip().casefold()
+    return [
+        pokemon for pokemon in (box_pokemon or [])
+        if _box_label(pokemon).casefold() == wanted
+    ]
+
+
+def _compare_box_summaries(left, right):
+    """Return entries unique to each box and entries present in both."""
+    left = left or {}
+    right = right or {}
+    return {
+        "left_only": [value for key, value in left.items() if key not in right],
+        "right_only": [value for key, value in right.items() if key not in left],
+        "shared": [value for key, value in left.items() if key in right],
+    }
+
+
+def _find_newly_obtained(box_pokemon, collection_entries):
+    """Identify live-box entries absent from the manually tracked collection."""
+    live = _build_box_summary(box_pokemon)
+    tracked = {
+        _box_collection_key(row[1], row[2]): row
+        for row in (collection_entries or [])
+    }
+    return [value for key, value in live.items() if key not in tracked]
+
+
+def _collection_export_data(collection_id, collection_name=None, box=None):
+    entries = _get_collection_entries(collection_id, box=box, include_box=True)
+    return [
+        {
+            "collection": collection_name,
+            "pokemon": row[1],
+            "variant": row[2],
+            "quantity": row[3],
+            "box": row[4] or "Unassigned",
+            "obtained_at": row[5] if len(row) > 5 else None,
+        }
+        for row in entries
+    ]
+
+
+def _export_collection(collection_id, collection_name, path, fmt="json", box=None):
+    """Export collection rows as JSON or CSV; returns the written path."""
+    data = _collection_export_data(collection_id, collection_name, box)
+    fmt = fmt.casefold()
+    if fmt not in ("json", "csv"):
+        raise ValueError("Format must be JSON or CSV.")
+    if not path.lower().endswith("." + fmt):
+        path += "." + fmt
+    if fmt == "json":
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+    else:
+        with open(path, "w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=data[0].keys() if data else
+                                    ["collection", "pokemon", "variant", "quantity", "box"])
+            writer.writeheader()
+            writer.writerows(data)
+    return path
+
+
+def _get_collection_summary(collection_id):
+    summary = {}
+
+    for _, pokemon, variant, quantity in _get_collection_entries(collection_id):
+        key = _box_collection_key(pokemon, variant)
+        summary[key] = {
+            "pokemon": pokemon,
+            "variant": variant,
+            "quantity": quantity,
+        }
+
+    return summary
+
+
+def _box_collection_preview(driver, collection_id, collection_name):
+    _clear_screen()
+    _print_header(
+        "BOX COLLECTION VIEW",
+        f"{collection_name} | preview before sync",
+    )
+
+    print(f"{DIM}Reading all Pokémon from your live box...{RESET}")
+    print()
+
+    selected_box = input(
+        f"{CYAN}Box filter (blank for all boxes):{RESET} "
+    ).strip()
+    box_pokemon = _filter_box_pokemon(
+        fetch_all_box_pokemon(driver), selected_box
+    )
+    if not box_pokemon:
+        _print_error("No Pokémon were found, or the box could not be loaded.")
+        _pause()
+        return
+
+    box_summary = _build_box_summary(box_pokemon)
+    collection_summary = _get_collection_summary(collection_id)
+    box_only = [
+        value for key, value in box_summary.items()
+        if key not in collection_summary
+    ]
+    tracked = [
+        value for key, value in box_summary.items()
+        if key in collection_summary
+    ]
+    tracked_only = [
+        value for key, value in collection_summary.items()
+        if key not in box_summary
+    ]
+
+    print(f"{CYAN}{BOLD}BOX SUMMARY{RESET}")
+    print(f"  Pokémon in box : {WHITE}{len(box_pokemon):,}{RESET}")
+    print(f"  Unique entries : {WHITE}{len(box_summary):,}{RESET}")
+    print(f"  Already tracked: {GREEN}{len(tracked):,}{RESET}")
+    print(f"  New to import  : {YELLOW}{len(box_only):,}{RESET}")
+    print(f"  Not in box     : {DIM}{len(tracked_only):,}{RESET}")
+
+    if box_only:
+        print()
+        print(f"{YELLOW}{BOLD}BOX ENTRIES NOT IN COLLECTION{RESET}")
+        for value in sorted(box_only, key=lambda item: (item["pokemon"].casefold(), item["variant"].casefold())):
+            print(f"  {YELLOW}+{RESET} {value['pokemon']} [{value['variant']}] x{value['quantity']}")
+
+    if tracked_only:
+        print()
+        print(f"{DIM}{BOLD}TRACKED ENTRIES NOT CURRENTLY IN BOX{RESET}")
+        for value in sorted(tracked_only, key=lambda item: (item["pokemon"].casefold(), item["variant"].casefold())):
+            print(f"  {DIM}- {value['pokemon']} [{value['variant']}] x{value['quantity']}{RESET}")
+
+    if not box_only:
+        print()
+        _print_success("Your box is already represented in this collection.")
+        _pause()
+        return
+
+    print()
+    confirm = input(
+        f"{YELLOW}Import the {len(box_only)} box-only entries? [y/N]:{RESET} "
+    ).strip().lower()
+
+    if confirm != "y":
+        _print_info("Preview closed without changing the collection.")
+        _pause()
+        return
+
+    imported = 0
+    for value in box_only:
+        success, _ = _add_collection_entry(
+            collection_id,
+            value["pokemon"],
+            value["variant"],
+            value["quantity"],
+            value.get("box"),
+        )
+        if success:
+            imported += 1
+
+    print()
+    _print_success(f"Imported {imported} new box entries into '{collection_name}'.")
+    _pause()
+
+
+def _compare_live_boxes(driver):
+    _clear_screen()
+    _print_header("COMPARE BOXES", "Compare two live box snapshots")
+    first = fetch_all_box_pokemon(driver)
+    second = fetch_all_box_pokemon(driver)
+    comparison = _compare_box_summaries(
+        _build_box_summary(first), _build_box_summary(second)
+    )
+    print(f"Only in first snapshot : {len(comparison['left_only'])}")
+    print(f"Only in second snapshot: {len(comparison['right_only'])}")
+    print(f"Shared entries         : {len(comparison['shared'])}")
+    _pause()
+
+
+def _export_collection_menu(collection_id, collection_name):
+    _clear_screen()
+    _print_header("EXPORT COLLECTION", collection_name)
+    fmt = input(f"{CYAN}Format [json/csv]:{RESET} ").strip().lower()
+    path = input(f"{CYAN}Output file:{RESET} ").strip()
+    if not path:
+        _print_error("Output file cannot be empty.")
+    else:
+        try:
+            written = _export_collection(collection_id, collection_name, path, fmt)
+            _print_success(f"Exported collection to {written}.")
+        except (OSError, ValueError) as error:
+            _print_error(str(error))
+    _pause()
+
+
+# ============================================================================
+# SELECTED COLLECTION MENU
+# ============================================================================
+
+def _collection_menu(collection_id, collection_name, driver):
+    while True:
+        _clear_screen()
+
+        unique_pokemon, total_quantity, total_entries = (
+            _get_collection_totals(collection_id)
+        )
+
+        _print_header(
+            f"COLLECTION: {collection_name}",
+            "Manual Pokémon collection tracker",
+        )
+
+        print(
+            f"  {CYAN}Unique Pokémon:{RESET} "
+            f"{WHITE}{unique_pokemon}{RESET}"
+            f"     "
+            f"{CYAN}Total Qty:{RESET} "
+            f"{YELLOW}{total_quantity}{RESET}"
+            f"     "
+            f"{CYAN}Entries:{RESET} "
+            f"{WHITE}{total_entries}{RESET}"
+        )
+
+        print()
+
+        _print_divider()
+
+        print()
+
+        _print_menu_option(
+            "1",
+            "View Collection",
+            "Display every entry",
+        )
+
+        _print_menu_option(
+            "2",
+            "Add Pokémon",
+            "Manually add Pokémon / variant / quantity",
+        )
+
+        _print_menu_option(
+            "3",
+            "Edit Pokémon",
+            "Modify an existing entry",
+        )
+
+        _print_menu_option(
+            "4",
+            "Remove Pokémon",
+            "Remove an existing entry",
+        )
+
+        _print_menu_option(
+            "5",
+            "Search Collection",
+            "Search Pokémon and variants",
+        )
+
+        _print_menu_option(
+            "6",
+            "Statistics",
+            "View collection totals",
+        )
+
+        _print_menu_option(
+            "7",
+            "View Box / Sync",
+            "Preview live box differences and import safely",
+        )
+        _print_menu_option("8", "View by Box", "Filter entries by box label")
+        _print_menu_option("9", "Compare Boxes", "Compare two live box snapshots")
+        _print_menu_option("10", "Export Collection", "Write JSON or CSV")
+
+        print()
+
+        _print_divider()
+
+        print()
+
+        _print_menu_option(
+            "0",
+            "Back",
+            "Return to collection selection",
+        )
+
+        print()
+
+        choice = input(
+            f"{CYAN}Select Option [0-10]:{RESET} "
+        ).strip()
 
         if choice == "0":
             return
 
-        if choice == "n":
-
-            _create_collection_menu(
-                user_id
+        if choice == "1":
+            _view_collection(
+                collection_id,
+                collection_name,
             )
-
+            _pause()
             continue
 
-        if choice == "m":
-
-            _manage_collections(
-                user_id
-            )
-
+        if choice == "2":
+            _add_pokemon(collection_id)
             continue
 
-        try:
+        if choice == "3":
+            _edit_pokemon(collection_id)
+            continue
 
-            index = int(choice)
+        if choice == "4":
+            _remove_pokemon(collection_id)
+            continue
 
-            if (
-                1 <= index <= len(collections)
+        if choice == "5":
+            _search_collection(
+                collection_id,
+                collection_name,
+            )
+            continue
+
+        if choice == "6":
+            _collection_statistics(
+                collection_id,
+                collection_name,
+            )
+            continue
+
+        if choice == "7":
+            _box_collection_preview(
+                driver,
+                collection_id,
+                collection_name,
+            )
+            continue
+
+        if choice == "8":
+            box = input(f"{CYAN}Box label:{RESET} ").strip()
+            _view_collection(collection_id, collection_name, box=box)
+            _pause()
+            continue
+
+        if choice == "9":
+            _compare_live_boxes(driver)
+            continue
+
+        if choice == "10":
+            _export_collection_menu(collection_id, collection_name)
+            continue
+
+        _print_error("Invalid option.")
+        _pause()
+
+
+# ============================================================================
+# MAIN COLLECTION MENU
+# ============================================================================
+
+def collection_menu(driver=None, user_id=None):
+    """
+    Main entry point used by menus.main_menu.
+
+    The collection tracker remains manual by default; option 7 can compare
+    it with the live box and perform an explicit additive import.
+    """
+
+    _initialize_database()
+
+    resolved_user_id = _get_user_id(user_id)
+
+    while True:
+        _clear_screen()
+
+        collections = _get_collections(resolved_user_id)
+
+        _print_header(
+            "POKÉMON COLLECTIONS",
+            "Manual collection tracking",
+        )
+
+        print(
+            f"{DIM}"
+            "Track your Pokémon manually using separate collection logs."
+            f"{RESET}"
+        )
+
+        print()
+
+        if collections:
+            print(
+                f"{WHITE}{BOLD}YOUR COLLECTIONS{RESET}"
+            )
+
+            print()
+
+            for index, (_, name) in enumerate(
+                collections,
+                1,
             ):
-
-                collection_id = collections[
-                    index - 1
-                ][0]
-
-                _collection_menu(
-                    user_id,
-                    collection_id
+                unique_pokemon, total_quantity, total_entries = (
+                    _get_collection_totals(
+                        collections[index - 1][0]
+                    )
                 )
 
-            else:
+                print(
+                    f"  {CYAN}{BOLD}[{index}]{RESET} "
+                    f"{WHITE}{name:<30}{RESET}"
+                    f"{DIM}"
+                    f"  {unique_pokemon} Pokémon"
+                    f"  |  {total_quantity} total"
+                    f"  |  {total_entries} entries"
+                    f"{RESET}"
+                )
 
-                raise ValueError
+            print()
 
-        except ValueError:
-
+        else:
             print(
-                f"\n{RED}"
-                f"✗ Invalid selection."
+                f"{DIM}"
+                "No collection logs exist yet."
                 f"{RESET}"
             )
 
-            time.sleep(0.7)
+            print()
 
+        _print_divider()
 
-# ============================================================
-# STANDALONE TEST
-# ============================================================
+        print()
 
-if __name__ == "__main__":
+        _print_menu_option(
+            "1",
+            "Open Collection",
+            "Select a collection to manage",
+        )
 
-    collection_menu()
+        _print_menu_option(
+            "2",
+            "Create Collection",
+            "Create a new named collection",
+        )
+
+        _print_menu_option(
+            "3",
+            "Manage Collections",
+            "Rename or delete collections",
+        )
+
+        print()
+
+        _print_menu_option(
+            "0",
+            "Back",
+            "Return to the main menu",
+        )
+
+        print()
+
+        choice = input(
+            f"{CYAN}Select Option [0-3]:{RESET} "
+        ).strip()
+
+        if choice == "0":
+            return
+
+        if choice == "1":
+            selected = _select_collection(
+                resolved_user_id,
+                "OPEN COLLECTION",
+            )
+
+            if selected:
+                collection_id, collection_name = selected
+
+                _collection_menu(
+                    collection_id,
+                    collection_name,
+                    driver,
+                )
+
+            continue
+
+        if choice == "2":
+            _create_collection_menu(
+                resolved_user_id
+            )
+            continue
+
+        if choice == "3":
+            _manage_collections(
+                resolved_user_id
+            )
+            continue
+
+        _print_error("Invalid option.")
+        _pause()

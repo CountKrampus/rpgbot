@@ -29,7 +29,7 @@ from typing import Optional
 # CONFIGURATION
 # ============================================================
 
-DB_FILE = Path(__file__).resolve().parent / "pokemon_collections.db"
+DB_FILE = Path(__file__).resolve().parent / "eclipse_maps.db"
 
 
 # ============================================================

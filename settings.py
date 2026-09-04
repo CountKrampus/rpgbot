@@ -12,6 +12,7 @@ setters - it never duplicates or replaces that logic.
 
 import json
 import os
+import tempfile
 
 SETTINGS_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -19,8 +20,8 @@ SETTINGS_FILE = os.path.join(
 )
 
 DEFAULT_SETTINGS = {
-    "search_delay_min": 1.5,
-    "search_delay_max": 2.5,
+    "search_delay_min": 0.7,
+    "search_delay_max": 1.2,
     "preferred_ball_order": [
         "Ultra Ball",
         "Great Ball",
@@ -38,8 +39,8 @@ DEFAULT_SETTINGS = {
     "auto_stop_on_consecutive_failures": None,
     "log_level": "normal",
     "search_encounter_timeout_seconds": 20,
-    "ball_selection_delay_ms": 500,
-    "encounter_detection_retry_delay_ms": 500,
+    "ball_selection_delay_ms": 300,
+    "encounter_detection_retry_delay_ms": 250,
     "mine_result_poll_interval_ms": 150,
     "mining_encounter_auto_catch": True,
     "auto_stop_mining_on_area_cleared": True,
@@ -49,23 +50,18 @@ DEFAULT_SETTINGS = {
     "session_time_limit_minutes": None,
     "auto_logout_after_session": False,
     "notify_on_shiny_encounter": True,
-    
-    # ================================================================
-    # BROWSER SETTINGS
-    # ================================================================
+    "cancellation_hotkey": "Q",
     "browser_name": "auto",
-    "browser_platform": "auto",
-    "browser_mode": "launch",
-    
-    # ================================================================
-    # AUTO-UPDATE SETTINGS (Option 3)
-    # ================================================================
-    "auto_update_enabled": False,
-    "auto_update_check_frequency_hours": 24,
-    "auto_update_restart_after": True,
-    "auto_update_quiet_mode": False,
-    "auto_update_last_check": None,
-    "auto_update_notify": True,
+    "browser_allow_fallback": False,
+       # ================================================================
+        # AUTO-UPDATE SETTINGS (Option 3)
+        # ================================================================
+        "auto_update_enabled": False,
+        "auto_update_check_frequency_hours": 24,
+        "auto_update_restart_after": True,
+        "auto_update_quiet_mode": False,
+        "auto_update_last_check": None,
+        "auto_update_notify": True,
 }
 
 
@@ -88,10 +84,15 @@ def load_settings():
 
         if isinstance(data, dict):
             settings.update(data)
+        else:
+            raise ValueError("settings root must be an object")
 
-    except (json.JSONDecodeError, OSError):
-
-        pass
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        # Keep the bad file available for diagnosis, but recover immediately.
+        try:
+            os.replace(SETTINGS_FILE, SETTINGS_FILE + ".corrupt")
+        except OSError:
+            pass
 
     return settings
 
@@ -103,14 +104,56 @@ def save_settings(settings):
     """
 
     try:
-
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-
+        if not isinstance(settings, dict):
+            return False
+        folder = os.path.dirname(SETTINGS_FILE) or "."
+        fd, temporary = tempfile.mkstemp(
+            prefix=".settings-", suffix=".json", dir=folder
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2)
+                f.write("\n")
+            os.replace(temporary, SETTINGS_FILE)
+        finally:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
         return True
-
     except OSError:
+        return False
 
+
+def export_settings(path):
+    """Export the current live configuration to a separate JSON file."""
+    target = os.fspath(path)
+    try:
+        with open(target, "w", encoding="utf-8") as stream:
+            json.dump(gather_current_settings(), stream, indent=2)
+            stream.write("\n")
+        return True
+    except (OSError, TypeError):
+        return False
+
+
+def import_settings(path):
+    """Import, validate, apply, and persist settings from a JSON file."""
+    try:
+        with open(os.fspath(path), "r", encoding="utf-8") as stream:
+            data = json.load(stream)
+        if not isinstance(data, dict):
+            return False
+        merged = dict(DEFAULT_SETTINGS)
+        merged.update(data)
+        if not isinstance(merged.get("cancellation_hotkey"), str):
+            merged["cancellation_hotkey"] = DEFAULT_SETTINGS["cancellation_hotkey"]
+        from cancellation import set_cancel_key
+        if not set_cancel_key(merged["cancellation_hotkey"]):
+            merged["cancellation_hotkey"] = DEFAULT_SETTINGS["cancellation_hotkey"]
+        apply_settings(merged)
+        return save_settings(gather_current_settings())
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return False
 
 
@@ -153,6 +196,11 @@ def gather_current_settings():
         get_auto_logout_after_session,
         get_notify_on_shiny_encounter,
     )
+    from browser import (
+        get_browser_name,
+        get_browser_allow_fallback,
+    )
+    from cancellation import get_cancel_key
  # Import auto-update getters (Option 3)
     try:
         from auto_update_settings_unfinished import (
@@ -218,6 +266,9 @@ def gather_current_settings():
         "session_time_limit_minutes": get_session_time_limit(),
         "auto_logout_after_session": get_auto_logout_after_session(),
         "notify_on_shiny_encounter": get_notify_on_shiny_encounter(),
+        "cancellation_hotkey": get_cancel_key(),
+        "browser_name": get_browser_name(),
+        "browser_allow_fallback": get_browser_allow_fallback(),
         # Auto-update settings (Option 3)
                 "auto_update_enabled": get_auto_update_enabled(),
                 "auto_update_check_frequency_hours": get_auto_update_frequency(),
@@ -272,6 +323,11 @@ def apply_settings(settings):
         set_auto_logout_after_session,
         set_notify_on_shiny_encounter,
     )
+    from browser import (
+        set_browser_name,
+        set_browser_allow_fallback,
+    )
+    from cancellation import set_cancel_key
    # Import auto-update setters (Option 3)
     try:
         from auto_update_settings_unfinished import AutoUpdateSettings as AutoUpdateSettings_
@@ -288,6 +344,13 @@ def apply_settings(settings):
             "search_delay_max",
             DEFAULT_SETTINGS["search_delay_max"],
         ),
+    )
+
+    set_cancel_key(
+        settings.get(
+            "cancellation_hotkey",
+            DEFAULT_SETTINGS["cancellation_hotkey"],
+        )
     )
 
     ball_order = settings.get("preferred_ball_order")
@@ -447,6 +510,20 @@ def apply_settings(settings):
             DEFAULT_SETTINGS["notify_on_shiny_encounter"],
         )
     )
+
+    set_browser_name(
+        settings.get(
+            "browser_name",
+            DEFAULT_SETTINGS["browser_name"],
+        )
+    )
+
+    set_browser_allow_fallback(
+        settings.get(
+            "browser_allow_fallback",
+            DEFAULT_SETTINGS["browser_allow_fallback"],
+        )
+    )
     # Apply auto-update settings (Option 3)
     if _auto_update_settings:
         _auto_update_settings.set_auto_update_enabled(
@@ -485,42 +562,3 @@ def apply_settings(settings):
                 DEFAULT_SETTINGS["auto_update_notify"],
             )
         )
-
-# ================================================================
-# CROSS-PLATFORM BROWSER MODE SUPPORT
-# ================================================================
-
-# Browser modes per platform
-BROWSER_MODES_WINDOWS = ["launch", "attach"]
-BROWSER_MODES_ANDROID = ["cdp-remote", "attach"]
-BROWSER_MODES_LINUX = ["launch", "attach"]
-
-# Browser choices per platform  
-BROWSERS_WINDOWS = ["brave", "chrome", "chromium", "auto"]
-BROWSERS_ANDROID = ["android-cdp", "android-brave", "termux"]
-BROWSERS_LINUX = ["brave", "chrome", "chromium", "auto"]
-
-# Get available browsers for platform
-def get_available_browsers(platform="auto"):
-    """Get list of available browsers for a platform."""
-    if platform == "windows" or platform == "auto":
-        return BROWSERS_WINDOWS
-    elif platform == "android":
-        return BROWSERS_ANDROID
-    elif platform == "linux":
-        return BROWSERS_LINUX
-    else:
-        return BROWSERS_WINDOWS  # Default to Windows
-
-
-def get_available_modes(platform="auto"):
-    """Get list of available browser modes for a platform."""
-    if platform == "windows" or platform == "auto":
-        return BROWSER_MODES_WINDOWS
-    elif platform == "android":
-        return BROWSER_MODES_ANDROID
-    elif platform == "linux":
-        return BROWSER_MODES_LINUX
-    else:
-        return BROWSER_MODES_WINDOWS  # Default to Windows
-

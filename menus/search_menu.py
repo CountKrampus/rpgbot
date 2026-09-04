@@ -22,6 +22,7 @@ from search import (
     target_pokemon_mode,
 )
 from capture import get_capture_stats
+from capture import get_preferred_ball_order, set_preferred_ball_order
 from box import search_box
 
 
@@ -170,6 +171,22 @@ def _search_settings():
         time.sleep(1.2)
 
 
+def _search_ball_settings():
+    current = get_preferred_ball_order()
+    answer = input(
+        "Poké Ball priority (comma-separated) "
+        f"[{', '.join(current)}]: "
+    ).strip()
+    if not answer:
+        return
+    balls = [item.strip() for item in answer.split(",") if item.strip()]
+    if set_preferred_ball_order(balls):
+        print(f"{GREEN}✓ Ball priority updated.{RESET}")
+    else:
+        print(f"{RED}✗ Ball priority cannot be empty.{RESET}")
+    time.sleep(0.8)
+
+
 def _search_statistics():
     w = 60
     def _drow(content):
@@ -287,12 +304,13 @@ def search_menu(driver):
         print(_row(f"    {KEY_COLOR}[ 6]{RESET} {NAME_COLOR}Search Settings{RESET}      {DESC_COLOR}— Customize delay intervals between searches{RESET}", w))
         print(_row(f"    {KEY_COLOR}[ 7]{RESET} {NAME_COLOR}Search Statistics{RESET}    {DESC_COLOR}— View session search counts, captures & rares{RESET}", w))
         print(_row("", w))
-        print(_row(f"    {RED}{BOLD}[ 8]{RESET} {RED}Back{RESET}                 {DESC_COLOR}— Return to main menu{RESET}", w))
+        print(_row(f"    {KEY_COLOR}[ 8]{RESET} {NAME_COLOR}Ball Settings{RESET}       {DESC_COLOR}— Choose capture ball priority{RESET}", w))
+        print(_row(f"    {RED}{BOLD}[ 9]{RESET} {RED}Back{RESET}                 {DESC_COLOR}— Return to main menu{RESET}", w))
         print(_row("", w))
         print(bot_border)
 
         try:
-            choice = input(f"\n{BOLD}{CYAN}❯ Select Option {GRAY}[1-8]{CYAN}:{RESET} ").strip()
+            choice = input(f"\n{BOLD}{CYAN}❯ Select Option {GRAY}[1-9]{CYAN}:{RESET} ").strip()
         except (KeyboardInterrupt, EOFError):
             break
 
@@ -311,7 +329,9 @@ def search_menu(driver):
         elif choice == "7":
             _search_statistics()
         elif choice == "8":
+            _search_ball_settings()
+        elif choice == "9":
             return
         else:
-            print(f"\n{RED}✗ Invalid choice '{choice}'. Please choose 1-8.{RESET}")
+            print(f"\n{RED}✗ Invalid choice '{choice}'. Please choose 1-9.{RESET}")
             time.sleep(1.0)
