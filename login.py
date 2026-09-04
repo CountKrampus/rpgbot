@@ -353,6 +353,32 @@ def is_logged_in(driver):
 # LOGIN
 # ============================================================
 
+def _login_form_timeout_message(driver):
+    try:
+        source = (driver.page_source or "").lower()
+        title = getattr(driver, "title", "")
+        url = getattr(driver, "current_url", "")
+
+        if "cf-chl-" in source or "challenge-platform" in source:
+            return (
+                "Eclipse returned a Cloudflare challenge instead of the "
+                f"login form (title={title!r}, url={url!r})."
+            )
+
+        if "captcha" in source:
+            return (
+                "Eclipse returned a CAPTCHA instead of the login form "
+                f"(title={title!r}, url={url!r})."
+            )
+
+        return (
+            "Login form not found "
+            f"(title={title!r}, url={url!r})."
+        )
+    except Exception:
+        return "Login form not found."
+
+
 def login(
     driver,
     username,
@@ -527,7 +553,7 @@ def login(
 
         _print_status(
             "✗",
-            "Login form not found.",
+            _login_form_timeout_message(driver),
             RED,
         )
 

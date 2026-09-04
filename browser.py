@@ -1682,6 +1682,10 @@ def _create_termux_driver(profile_path, binary_path, instance_name):
         "--no-sandbox",
         "--disable-gpu",
         "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-features=AutomationControlled",
+        "--window-size=1280,900",
+        "--lang=en-US",
         "--no-first-run",
         "--no-default-browser-check",
         f"--remote-debugging-address=127.0.0.1",
@@ -1710,6 +1714,18 @@ def _create_termux_driver(profile_path, binary_path, instance_name):
             )
         else:
             driver = webdriver.Chrome(options=options)
+        try:
+            driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": (
+                        "Object.defineProperty(navigator, 'webdriver', "
+                        "{get: () => undefined});"
+                    )
+                },
+            )
+        except Exception:
+            pass
         _termux_processes[instance_name] = process
         return driver
     except Exception:
