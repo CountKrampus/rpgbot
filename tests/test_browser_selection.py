@@ -183,10 +183,18 @@ class TestTermuxBrowserStartup(unittest.TestCase):
             )
 
         self.assertIs(result, driver)
-        create_termux.assert_called_once_with(
+        create_termux.assert_called_once()
+        launch_profile = create_termux.call_args.args[0]
+        self.assertEqual(
+            launch_profile.parent,
             Path("profile"),
-            Path("chromium"),
-            "termux-account",
+        )
+        self.assertTrue(
+            launch_profile.name.startswith("launch_")
+        )
+        self.assertEqual(
+            create_termux.call_args.args[1:],
+            (Path("chromium"), "termux-account"),
         )
 
 
@@ -217,6 +225,26 @@ class TestGetProfilePathByBrowser(unittest.TestCase):
                     path,
                     root / "chrome" / "instance_goldisduck",
                 )
+
+    def test_launch_profiles_are_unique(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "selenium_profiles"
+            with patch.object(browser, "PROFILE_ROOT", root):
+                first = browser.create_launch_profile_path(
+                    "goldisduck",
+                    browser="chromium",
+                )
+                second = browser.create_launch_profile_path(
+                    "goldisduck",
+                    browser="chromium",
+                )
+
+                self.assertNotEqual(first, second)
+                self.assertTrue(first.is_dir())
+                self.assertTrue(second.is_dir())
+
+                browser.remove_launch_profile_path(first)
+                browser.remove_launch_profile_path(second)
 
 
 class TestBrowserSettingsDefaults(unittest.TestCase):

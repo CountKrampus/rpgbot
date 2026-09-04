@@ -8,6 +8,7 @@ import socket
 import subprocess
 import time
 import urllib.request
+import uuid
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -163,6 +164,7 @@ BROWSER_WHICH_NAMES = {
 _browser_name = "auto"
 _browser_allow_fallback = False
 _termux_processes = {}
+_active_profile_paths = {}
 
 
 # ============================================================
@@ -770,6 +772,29 @@ def get_profile_path(instance=None, browser="brave"):
     )
 
     return profile_path
+
+
+def create_launch_profile_path(instance=None, browser="brave"):
+    base_path = get_profile_path(
+        instance,
+        browser=browser,
+    )
+    launch_path = base_path / f"launch_{uuid.uuid4().hex}"
+    launch_path.mkdir(
+        parents=True,
+        exist_ok=False,
+    )
+    return launch_path
+
+
+def remove_launch_profile_path(profile_path):
+    try:
+        shutil.rmtree(
+            profile_path,
+            ignore_errors=False,
+        )
+    except FileNotFoundError:
+        return
 
 
 # ============================================================
@@ -1859,7 +1884,7 @@ class BrowserManager:
 
             raise
 
-        profile_path = get_profile_path(
+        profile_root = get_profile_path(
             instance_name,
             browser=selected_name,
         )
@@ -1888,7 +1913,7 @@ class BrowserManager:
 
         _status(
             "PROFILE",
-            str(profile_path),
+            str(profile_root),
             CYAN,
         )
 
@@ -1910,6 +1935,10 @@ class BrowserManager:
         ):
 
             driver = None
+            launch_profile = create_launch_profile_path(
+                instance_name,
+                browser=selected_name,
+            )
 
             try:
 
@@ -1924,13 +1953,13 @@ class BrowserManager:
                     driver = create_headless_driver(instance_name)
                 elif selected_name == "termux":
                     driver = _create_termux_driver(
-                        profile_path,
+                        launch_profile,
                         binary_path,
                         instance_name,
                     )
                 else:
                     driver = _create_driver(
-                        profile_path,
+                        launch_profile,
                         binary_path,
                     )
 
@@ -1952,6 +1981,7 @@ class BrowserManager:
                     f"'{instance_name}' is running."
                 )
 
+                _active_profile_paths[instance_name] = launch_profile
                 print()
 
                 return driver
@@ -1978,6 +2008,7 @@ class BrowserManager:
                         pass
 
                 _stop_termux_process(instance_name)
+                remove_launch_profile_path(launch_profile)
 
                 if attempt < STARTUP_RETRIES:
 
@@ -2001,7 +2032,7 @@ class BrowserManager:
         raise RuntimeError(
             f"Unable to start {engine_label} for account "
             f"'{instance_name}'.\n"
-            f"Profile: {profile_path}\n"
+            f"Profile root: {profile_root}\n"
             f"Last error: {last_error}"
         )
 
@@ -2047,6 +2078,14 @@ class BrowserManager:
                 )
 
         _stop_termux_process(instance_name)
+        launch_profile = _active_profile_paths.pop(
+            instance_name,
+            None,
+        )
+        if launch_profile is not None:
+            remove_launch_profile_path(
+                launch_profile
+            )
 
         release_instance_lock(
             instance_name
