@@ -22,7 +22,9 @@ def main():
         if not account:
             return
 
-        print(f"\n[DEBUG] is_termux = {PlatformDetector.is_termux()}")
+        print(f"\n[DEBUG] Checking platform...")
+        is_term = PlatformDetector.is_termux()
+        print(f"[DEBUG] is_termux = {is_term}")
         
         # On Termux, ask for browser choice before login
         if PlatformDetector.is_termux():

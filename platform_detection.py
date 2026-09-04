@@ -42,21 +42,9 @@ class PlatformDetector:
         """Check if running in Termux."""
         import os
         
-        # Simplest check: is home directory under /data/data/com.termux?
         home = os.path.expanduser("~")
-        print(f"[DEBUG _is_termux] HOME={home}")
-        
-        if "/data/data/com.termux" in home:
-            print("[DEBUG _is_termux] MATCH: home contains termux path")
-            return True
-        
-        # Also check the path directly
-        if Path("/data/data/com.termux").exists():
-            print("[DEBUG _is_termux] MATCH: /data/data/com.termux exists")
-            return True
-        
-        print("[DEBUG _is_termux] NO MATCH: returning False")
-        return False
+        # TEMPORARY: Just check if we're in the Termux home directory
+        return "/data/data/com.termux" in home or "/data/data/com.termux/files/home" in home
 
     @classmethod
     def is_windows(cls):
