@@ -3,6 +3,7 @@ from browser import BrowserManager, release_instance_lock
 from login import login
 from menus.main_menu import main_menu
 import settings
+from platform_detection import PlatformDetector
 from break_timer import initialize_break_timer
 
 
@@ -42,6 +43,13 @@ def main():
         # Load browser preference from settings (defaults to "auto" if not set)
         loaded_settings = settings.load_settings()
         browser_choice = loaded_settings.get("browser_name", "auto")
+        if PlatformDetector.is_termux() and browser_choice in (
+            "auto",
+            "brave",
+            "chrome",
+            "chromium",
+        ):
+            browser_choice = "termux"
         
         driver = BrowserManager.create(
             account,

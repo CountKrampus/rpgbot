@@ -58,9 +58,10 @@ ANSI_STRIP_REGEX = re.compile(
 # CONFIGURATION
 # ============================================================
 
-BASE_DIR = Path(
-    r"F:\New folder\eclipse"
-)
+if Path("/data/data/com.termux").exists():
+    BASE_DIR = Path.home() / ".rpgbot"
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 
 # One persistent Brave profile per Eclipse account.
 PROFILE_ROOT = (
@@ -565,6 +566,14 @@ def resolve_browser(
         )
 
     installed = detect_installed_browsers()
+
+    if (
+        requested_name in ("auto", "chromium")
+        and Path("/data/data/com.termux").exists()
+    ):
+        termux_path = find_browser_executable("termux")
+        if termux_path is not None:
+            return "termux", termux_path
 
     if requested_name == "headless":
         return "headless", None
