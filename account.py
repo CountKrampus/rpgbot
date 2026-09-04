@@ -25,7 +25,7 @@ from selenium.common.exceptions import (
 )
 
 try:
-    import keyring
+    from secure_storage import SecureStorage
 except ImportError:
     keyring = None
 
@@ -169,7 +169,7 @@ def remove_account_name(username: str) -> None:
 
     if keyring is not None:
         try:
-            keyring.delete_password(KEYRING_SERVICE, username)
+            SecureStorage.remove_credential(username)
         except Exception:
             pass
 
@@ -182,7 +182,7 @@ def get_saved_password(username: str) -> Optional[str]:
         return None
 
     try:
-        return keyring.get_password(KEYRING_SERVICE, username)
+        return SecureStorage.get_credential(username)
     except Exception:
         return None
 
@@ -192,7 +192,7 @@ def save_password(username: str, password: str) -> None:
         return
 
     try:
-        keyring.set_password(KEYRING_SERVICE, username, password)
+        SecureStorage.save_credential(username, password)
     except Exception:
         pass
 
