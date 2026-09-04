@@ -883,3 +883,56 @@ def account_menu(driver) -> None:
 if __name__ == "__main__":
     _init_console()
     account_selector()
+
+# ================================================================
+# BROWSER SELECTOR
+# ================================================================
+
+def browser_selector():
+    """Quick browser selection before login."""
+    import settings
+    
+    print()
+    print("╔═══════════════════════════════════════════════════════════════╗")
+    print("║           SELECT BROWSER                                      ║")
+    print("╚═══════════════════════════════════════════════════════════════╝")
+    print()
+    
+    # Get available browsers for Android
+    browsers = ["headless", "android-cdp", "android-brave", "termux", "auto"]
+    
+    for i, browser in enumerate(browsers, 1):
+        if browser == "auto":
+            desc = "Auto Detect (Tries all available)"
+        elif browser == "android-cdp":
+            desc = "Android Chrome/Brave (via CDP)"
+        elif browser == "android-brave":
+            desc = "Android Brave Specific"
+        elif browser == "termux":
+            desc = "Termux Chromium"
+        elif browser == "headless":
+            desc = "HTTP Requests (No Browser)"
+        else:
+            desc = browser
+        
+        print(f"  [{i}] {browser:15} - {desc}")
+    
+    print()
+    choice = input("Select browser [1-5, or press Enter for auto]: ").strip()
+    
+    try:
+        if choice == "":
+            return "auto"
+        idx = int(choice) - 1
+        if 0 <= idx < len(browsers):
+            selected = browsers[idx]
+            settings.save_setting("browser_name", selected)
+            print(f"✓ Browser set to: {selected}\n")
+            return selected
+    except (ValueError, IndexError):
+        pass
+    
+    print("Invalid choice, using auto\n")
+    settings.save_setting("browser_name", "auto")
+    return "auto"
+

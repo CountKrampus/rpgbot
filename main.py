@@ -1,4 +1,4 @@
-from account import account_selector, get_saved_password
+from account import account_selector, get_saved_password, browser_selector
 from browser import BrowserManager, release_instance_lock
 from login import login
 from menus.main_menu import main_menu
@@ -21,6 +21,10 @@ def main():
 
         if not account:
             return
+
+        # On Termux, ask for browser choice before login
+        if PlatformDetector.is_termux():
+            browser_selector()
 
         password = get_saved_password(
             account
