@@ -24,7 +24,9 @@ def main():
 
         # On Termux, ask for browser choice before login
         if PlatformDetector.is_termux():
+            print("\n[DEBUG] Calling browser selector...")
             browser_selector()
+            print("[DEBUG] Browser selector done\n")
 
         password = get_saved_password(
             account
@@ -60,7 +62,7 @@ def main():
         
         driver = BrowserManager.create(
             account,
-            browser=browser_choice,
+            browser_name=browser_choice,
         )
 
         if not login(
