@@ -1450,3 +1450,33 @@ def wait_for_browser(
         )
 
     return False
+
+# ================================================================
+# SESSION PERSISTENCE INTEGRATION
+# ================================================================
+
+def get_driver_with_recovery(instance_name, browser="auto"):
+    """
+    Get or recover a browser driver with crash detection.
+    
+    Attempts to recover from previous crashes if possible.
+    """
+    from session_manager import SessionManager, ProfileRecovery, CrashDetector
+    
+    # Check if we can recover from a previous crash
+    if SessionManager.can_recover_session(instance_name):
+        print(f"Previous session found for {instance_name}, attempting recovery...")
+        SessionManager.resume_session(instance_name)
+    
+    # Start new session
+    driver = BrowserManager.create(instance_name, browser=browser)
+    
+    if driver:
+        # Start session tracking
+        SessionManager.start_session(instance_name, browser)
+        
+        # Start crash monitoring
+        CrashDetector.monitor_driver(driver, instance_name)
+    
+    return driver
+
