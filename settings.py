@@ -562,3 +562,8 @@ def apply_settings(settings):
                 DEFAULT_SETTINGS["auto_update_notify"],
             )
         )
+# Add headless to browser options
+BROWSERS_WINDOWS = ["brave", "chrome", "chromium", "auto", "headless"]
+BROWSERS_ANDROID = ["android-cdp", "android-brave", "termux", "headless"]
+BROWSERS_LINUX = ["brave", "chrome", "chromium", "auto", "headless"]
+

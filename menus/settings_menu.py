@@ -2345,3 +2345,15 @@ def settings_menu(driver):
             print(
                 f"{RED}✗ Invalid choice.{RESET}"
             )
+# Add headless option to browser descriptions
+def _get_browser_description(browser):
+    """Get description for browser option."""
+    descriptions = {
+        "auto": ("Auto Detect", "Tries: Brave → Chrome → Chromium"),
+        "android-cdp": ("Android (Any)", "Chrome/Brave on Android via CDP"),
+        "android-brave": ("Brave (Android)", "Brave on Android via CDP"),
+        "termux": ("Termux Chromium", "Chromium in Termux"),
+        "headless": ("Headless HTTP", "Real HTTP requests (no GUI browser)"),
+    }
+    return descriptions.get(browser, (browser.title(), f"Use {browser.title()}"))
+
