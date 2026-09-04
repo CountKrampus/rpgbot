@@ -45,7 +45,7 @@ def main():
         
         driver = BrowserManager.create(
             account,
-            browser=browser_choice,
+            browser_name=browser_choice,
         )
 
         if not login(
