@@ -40,7 +40,19 @@ class PlatformDetector:
     @classmethod
     def _is_termux(cls):
         """Check if running in Termux."""
-        return Path("/data/data/com.termux").exists()
+        import os
+        
+        # Check multiple Termux indicators
+        checks = [
+            Path("/data/data/com.termux").exists(),
+            Path("/data/data/com.termux/files").exists(),
+            os.environ.get("TERMUX_APP_PID") is not None,
+            os.environ.get("TERMUX_VERSION") is not None,
+            os.path.exists(os.path.expanduser("~/termux-info.txt")),
+            "termux" in os.environ.get("PATH", "").lower(),
+        ]
+        
+        return any(checks)
 
     @classmethod
     def is_windows(cls):
