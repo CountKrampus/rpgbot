@@ -85,6 +85,37 @@ BRAVE_PATHS = [
     ),
 ]
 
+CHROME_PATHS = [
+    Path(
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    ),
+    Path(
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+    ),
+    Path(
+        os.environ.get("LOCALAPPDATA", "")
+    )
+    / "Google"
+    / "Chrome"
+    / "Application"
+    / "chrome.exe",
+]
+
+CHROMIUM_PATHS = [
+    Path(
+        r"C:\Program Files\Chromium\Application\chrome.exe"
+    ),
+    Path(
+        r"C:\Program Files (x86)\Chromium\Application\chrome.exe"
+    ),
+    Path(
+        os.environ.get("LOCALAPPDATA", "")
+    )
+    / "Chromium"
+    / "Application"
+    / "chrome.exe",
+]
+
 SUPPORTED_BROWSERS = (
     "brave",
     "chrome",
@@ -577,6 +608,57 @@ def find_brave():
             )
         )
     )
+
+
+def _find_legacy_browser(paths, label):
+    for path in paths:
+        if path.is_file():
+            return path
+
+    raise FileNotFoundError(
+        f"{label} could not be found."
+    )
+
+
+def find_chrome():
+    return _find_legacy_browser(
+        CHROME_PATHS,
+        "Google Chrome",
+    )
+
+
+def find_chromium():
+    return _find_legacy_browser(
+        CHROMIUM_PATHS,
+        "Chromium",
+    )
+
+
+def find_browser(browser_name):
+    name = str(browser_name or "").strip().lower()
+
+    if name == "auto":
+        for finder in (find_brave, find_chrome, find_chromium):
+            try:
+                return finder()
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError(
+            "No supported browser could be detected."
+        )
+
+    finders = {
+        "brave": find_brave,
+        "chrome": find_chrome,
+        "chromium": find_chromium,
+    }
+
+    if name not in finders:
+        raise ValueError(
+            f"Unsupported browser: {browser_name}"
+        )
+
+    return finders[name]()
 
 
 # ============================================================
@@ -1586,7 +1668,7 @@ class BrowserManager:
         return ok
 
     @classmethod
-    def create(cls, instance=None):
+    def create(cls, instance=None, browser_name=None):
         """
         Start an independent persistent browser instance.
 
@@ -1613,7 +1695,9 @@ class BrowserManager:
         try:
 
             selected_name, binary_path = resolve_browser(
-                get_browser_name(),
+                browser_name
+                if browser_name is not None
+                else get_browser_name(),
                 allow_fallback=get_browser_allow_fallback(),
             )
 
@@ -1857,8 +1941,8 @@ def is_driver_alive(driver):
     return BrowserManager.is_alive(driver)
 
 
-def setup_driver(instance=None):
-    return BrowserManager.create(instance)
+def setup_driver(instance=None, browser_name="auto"):
+    return BrowserManager.create(instance, browser_name)
 
 
 def close_driver(driver, instance=None):
