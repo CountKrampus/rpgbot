@@ -572,7 +572,8 @@ def resolve_browser(
         if path is None:
             raise FileNotFoundError(
                 "Termux Chromium could not be detected. "
-                "Install it with: pkg install chromium"
+                "Install it with: pkg install tur-repo && "
+                "pkg install chromium"
             )
         return "termux", path
 
