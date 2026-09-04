@@ -202,8 +202,10 @@ TERMUX SETUP INSTRUCTIONS
    $ pip install -r requirements.txt
 
 7. Setup browser (choose one):
-   Option A: Install Termux-based Chromium
+   Option A: Install Termux-based headless Chromium
      $ pkg install chromium
+     # RPGBot starts Chromium with DevTools and connects Selenium
+     # automatically; no Android GUI or X11 session is required.
 
    Option B: Use device's Chrome/Brave via CDP
      • Requires device to have Chrome or Brave installed
@@ -216,7 +218,8 @@ TROUBLESHOOTING
 ───────────────────────────────────────────────────────────────
 • Permission denied: Use 'chmod +x' on scripts
 • Storage access: Grant storage permissions when prompted
-• Browser not found: Ensure browser is installed system-wide
+• Browser not found: Run 'pkg install chromium' and select
+  'Termux Chromium (headless)' in System Settings
 • CDP connection: Enable USB debugging and use 'adb'
 
 ═════════════════════════════════════════════════════════════════
@@ -288,4 +291,3 @@ echo "Run: python ~/rpgbot/main.py"
 def get_termux_diagnostics():
     """Run Termux environment diagnostics."""
     return TermuxEnvironment.validate_environment()
-

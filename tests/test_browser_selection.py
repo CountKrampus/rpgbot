@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from tempfile import TemporaryDirectory
 import os
 
@@ -116,6 +116,64 @@ class TestResolveBrowser(unittest.TestCase):
             )
             self.assertEqual(name, "brave")
             self.assertEqual(path, Path("brave.exe"))
+
+    def test_termux_requires_and_returns_chromium(self):
+        executable = Path("/data/data/com.termux/files/usr/bin/chromium")
+        with patch.object(
+            browser,
+            "find_browser_executable",
+            return_value=executable,
+        ):
+            self.assertEqual(
+                browser.resolve_browser("termux"),
+                ("termux", executable),
+            )
+
+
+class TestTermuxBrowserStartup(unittest.TestCase):
+
+    def test_create_uses_termux_driver(self):
+        driver = MagicMock()
+        with patch.object(browser, "acquire_instance_lock"), patch.object(
+            browser,
+            "resolve_browser",
+            return_value=("termux", Path("chromium")),
+        ), patch.object(
+            browser,
+            "get_profile_path",
+            return_value=Path("profile"),
+        ), patch.object(
+            browser,
+            "_create_termux_driver",
+            return_value=driver,
+        ) as create_termux, patch.object(
+            browser.BrowserManager,
+            "is_alive",
+            return_value=True,
+        ), patch.object(browser.time, "sleep"), patch.object(
+            browser,
+            "_print_header",
+        ), patch.object(
+            browser,
+            "_status",
+        ), patch.object(
+            browser,
+            "_info",
+        ), patch.object(
+            browser,
+            "_success",
+        ):
+            result = browser.BrowserManager.create(
+                "termux-account",
+                "termux",
+            )
+
+        self.assertIs(result, driver)
+        create_termux.assert_called_once_with(
+            Path("profile"),
+            Path("chromium"),
+            "termux-account",
+        )
 
 
 class TestGetProfilePathByBrowser(unittest.TestCase):

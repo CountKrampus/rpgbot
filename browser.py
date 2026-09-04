@@ -4,7 +4,10 @@ import os
 import re
 import shutil
 import sys
+import socket
+import subprocess
 import time
+import urllib.request
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -120,6 +123,7 @@ SUPPORTED_BROWSERS = (
     "brave",
     "chrome",
     "chromium",
+    "termux",
     "headless",
 )
 
@@ -134,6 +138,7 @@ BROWSER_LABELS = {
     "brave": "Brave Browser",
     "chrome": "Google Chrome",
     "chromium": "Chromium",
+    "termux": "Termux Chromium (headless)",
     "headless": "Headless Test Driver",
 }
 
@@ -157,6 +162,7 @@ BROWSER_WHICH_NAMES = {
 
 _browser_name = "auto"
 _browser_allow_fallback = False
+_termux_processes = {}
 
 
 # ============================================================
@@ -478,6 +484,13 @@ def candidate_paths(browser_name):
             / "chrome.exe",
         ]
 
+    if name == "termux":
+        return [
+            Path("/data/data/com.termux/files/usr/bin/chromium"),
+            Path("/data/data/com.termux/files/usr/bin/chromium-browser"),
+            Path("/data/data/com.termux/files/usr/bin/chrome"),
+        ]
+
     return []
 
 
@@ -553,6 +566,15 @@ def resolve_browser(
 
     if requested_name == "headless":
         return "headless", None
+
+    if requested_name == "termux":
+        path = find_browser_executable("termux")
+        if path is None:
+            raise FileNotFoundError(
+                "Termux Chromium could not be detected. "
+                "Install it with: pkg install chromium"
+            )
+        return "termux", path
 
     if requested_name == "auto":
 
@@ -1547,6 +1569,86 @@ def _print_diagnostic_report(results):
     return all_ok
 
 
+def _free_local_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _wait_for_devtools(port, timeout=20):
+    deadline = time.time() + timeout
+    url = f"http://127.0.0.1:{port}/json/version"
+
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1) as response:
+                if response.status == 200:
+                    return True
+        except (OSError, ValueError):
+            time.sleep(0.25)
+
+    raise RuntimeError(
+        f"Termux Chromium did not expose DevTools on port {port}."
+    )
+
+
+def _create_termux_driver(profile_path, binary_path, instance_name):
+    port = _free_local_port()
+    command = [
+        str(binary_path),
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        f"--remote-debugging-address=127.0.0.1",
+        f"--remote-debugging-port={port}",
+        f"--user-data-dir={profile_path}",
+        "about:blank",
+    ]
+
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        _wait_for_devtools(port)
+        options = Options()
+        options.debugger_address = f"127.0.0.1:{port}"
+        chromedriver = shutil.which("chromedriver")
+        if chromedriver:
+            from selenium.webdriver.chrome.service import Service
+
+            driver = webdriver.Chrome(
+                service=Service(chromedriver),
+                options=options,
+            )
+        else:
+            driver = webdriver.Chrome(options=options)
+        _termux_processes[instance_name] = process
+        return driver
+    except Exception:
+        process.terminate()
+        process.wait(timeout=5)
+        raise
+
+
+def _stop_termux_process(instance_name):
+    process = _termux_processes.pop(instance_name, None)
+    if process is None:
+        return
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
 # ============================================================
 # BROWSER MANAGER
 # ============================================================
@@ -1772,6 +1874,12 @@ class BrowserManager:
                     from headless_mode import create_headless_driver
 
                     driver = create_headless_driver(instance_name)
+                elif selected_name == "termux":
+                    driver = _create_termux_driver(
+                        profile_path,
+                        binary_path,
+                        instance_name,
+                    )
                 else:
                     driver = _create_driver(
                         profile_path,
@@ -1815,12 +1923,13 @@ class BrowserManager:
                 if driver is not None:
 
                     try:
-
                         driver.quit()
 
                     except Exception:
 
                         pass
+
+                _stop_termux_process(instance_name)
 
                 if attempt < STARTUP_RETRIES:
 
@@ -1877,7 +1986,6 @@ class BrowserManager:
             )
 
             try:
-
                 driver.quit()
 
                 _success(
@@ -1889,6 +1997,8 @@ class BrowserManager:
                 _warning(
                     "Brave session was already closed."
                 )
+
+        _stop_termux_process(instance_name)
 
         release_instance_lock(
             instance_name

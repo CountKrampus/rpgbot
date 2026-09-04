@@ -2009,16 +2009,21 @@ def _browser_settings(driver=None):
 
             _option(
                 "4",
-                "Headless Test Driver",
+                "Termux Chromium (headless)",
             )
 
             _option(
                 "5",
-                "Auto Detect",
+                "Headless Test Driver",
             )
 
             _option(
                 "6",
+                "Auto Detect",
+            )
+
+            _option(
+                "7",
                 "Back",
             )
 
@@ -2032,8 +2037,9 @@ def _browser_settings(driver=None):
                 "1": "brave",
                 "2": "chrome",
                 "3": "chromium",
-                "4": "headless",
-                "5": "auto",
+                "4": "termux",
+                "5": "headless",
+                "6": "auto",
             }
 
             if browser_choice in mapping:
@@ -2045,7 +2051,7 @@ def _browser_settings(driver=None):
                     f"{BROWSER_LABELS[selected]}.{RESET}"
                 )
 
-            elif browser_choice == "6":
+            elif browser_choice == "7":
 
                 continue
 
