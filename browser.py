@@ -374,7 +374,7 @@ def find_browser(browser_name="brave"):
     """
     Find browser executable by name.
     
-    Supports: brave, chrome, chromium, auto, android-cdp, android-brave, termux
+    Supports: brave, chrome, chromium, auto, android-cdp, android-brave, termux, headless
     """
     
     browser_name = str(browser_name).lower().strip()
@@ -425,7 +425,7 @@ def find_browser(browser_name="brave"):
     else:
         raise ValueError(
             f"Unknown browser: {browser_name}\n"
-            "Supported: brave, chrome, chromium, auto, android-cdp, android-brave, termux"
+            "Supported: brave, chrome, chromium, auto, android-cdp, android-brave, termux, headless"
         )
 
 
@@ -959,23 +959,28 @@ class BrowserManager:
         """
         Start an independent persistent browser instance.
 
-        Supports: brave, chrome, chromium, auto, android-cdp, termux
+        Supports: brave, chrome, chromium, auto, android-cdp, android-brave, termux, headless, headless
 
         Example:
 
             driver = BrowserManager.create("goldisduck", browser="brave")
             driver = BrowserManager.create("goldisduck", browser="android-cdp")
-            driver = BrowserManager.create("goldisduck", browser="termux")
+            driver = BrowserManager.create("goldisduck", browser="headless")
 
         Every account receives its own persistent profile and
         cross-process lock.
         
         For android-cdp: Requires CDP to be forwarded via ADB
         For termux: Requires Termux environment
+        For headless: No browser needed (testing/framework verification)
         """
 
         instance_name = sanitize_instance_name(instance)
         browser_name = str(browser).lower().strip()
+
+        # Handle headless mode (no browser)
+        if browser_name == "headless":
+            return cls._create_headless_driver(instance_name)
 
         # Handle Android CDP specially
         if browser_name == "android-cdp":
@@ -1307,6 +1312,14 @@ class BrowserManager:
             raise
 
     @classmethod
+    def _create_headless_driver(cls, instance_name):
+        """Create headless driver for testing without browser."""
+        
+        from headless_mode import create_headless_driver
+        
+        return create_headless_driver(instance_name)
+
+    @classmethod
     def close(cls, driver, instance=None):
         """
         Safely close Brave and release the account lock.
@@ -1479,4 +1492,19 @@ def get_driver_with_recovery(instance_name, browser="auto"):
         CrashDetector.monitor_driver(driver, instance_name)
     
     return driver
+
+
+
+# ================================================================
+# HEADLESS MODE FOR TESTING
+# ================================================================
+
+def create_headless_driver(instance_name):
+    """
+    Create headless driver for testing without browser.
+    
+    Useful for mobile testing or framework verification.
+    """
+    from headless_mode import create_headless_driver as create_headless
+    return create_headless(instance_name)
 
