@@ -922,17 +922,26 @@ def browser_selector():
     
     try:
         if choice == "":
-            return "auto"
-        idx = int(choice) - 1
-        if 0 <= idx < len(browsers):
-            selected = browsers[idx]
-            settings.save_setting("browser_name", selected)
-            print(f"✓ Browser set to: {selected}\n")
-            return selected
+            selected = "auto"
+        else:
+            idx = int(choice) - 1
+            if 0 <= idx < len(browsers):
+                selected = browsers[idx]
+            else:
+                print("Invalid choice, using auto\n")
+                selected = "auto"
+        
+        # Save browser choice
+        current_settings = settings.load_settings()
+        current_settings["browser_name"] = selected
+        settings.save_settings(current_settings)
+        
+        print(f"✓ Browser set to: {selected}\n")
+        return selected
     except (ValueError, IndexError):
-        pass
-    
-    print("Invalid choice, using auto\n")
-    settings.save_setting("browser_name", "auto")
-    return "auto"
+        print("Invalid choice, using auto\n")
+        current_settings = settings.load_settings()
+        current_settings["browser_name"] = "auto"
+        settings.save_settings(current_settings)
+        return "auto"
 
