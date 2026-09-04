@@ -41,10 +41,27 @@ class PlatformDetector:
     def _is_termux(cls):
         """Check if running in Termux."""
         import os
+        import subprocess
         
+        # Check 1: TERMUX_VERSION environment variable (most reliable)
+        if os.environ.get("TERMUX_VERSION"):
+            return True
+        
+        # Check 2: Check if running Termux shell
+        try:
+            result = subprocess.run(["which", "termux-setup-storage"], 
+                                   capture_output=True, timeout=1)
+            if result.returncode == 0:
+                return True
+        except:
+            pass
+        
+        # Check 3: Home directory check
         home = os.path.expanduser("~")
-        # TEMPORARY: Just check if we're in the Termux home directory
-        return "/data/data/com.termux" in home or "/data/data/com.termux/files/home" in home
+        if "/data/data/com.termux" in home:
+            return True
+        
+        return False
 
     @classmethod
     def is_windows(cls):
