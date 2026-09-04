@@ -22,9 +22,11 @@ def main():
         if not account:
             return
 
+        print(f"\n[DEBUG] is_termux = {PlatformDetector.is_termux()}")
+        
         # On Termux, ask for browser choice before login
         if PlatformDetector.is_termux():
-            print("\n[DEBUG] Calling browser selector...")
+            print("[DEBUG] Calling browser selector...")
             browser_selector()
             print("[DEBUG] Browser selector done\n")
 
