@@ -59,49 +59,53 @@ class HeadlessDriver:
             print(f"  [HTTP] Error: {str(e)[:50]}")
             return False
 
-    def find_element(self, by, value):
-        """Find element in HTML."""
+    def find_elements(self, by, value):
+        """Find multiple elements in HTML."""
         try:
             soup = BeautifulSoup(self.html_content, 'html.parser')
+            elements = []
             
             if by == "id":
-                element = soup.find(id=value)
+                elem = soup.find(id=value)
+                elements = [elem] if elem else []
             elif by == "name":
-                element = soup.find(attrs={"name": value})
+                elements = soup.find_all(attrs={"name": value})
             elif by == "class name":
-                element = soup.find(class_=value)
+                elements = soup.find_all(class_=value)
             elif by == "tag name":
-                element = soup.find(value)
+                elements = soup.find_all(value)
             elif by == "css selector":
-                element = soup.select(value)
-                element = element[0] if element else None
+                elements = soup.select(value)
             elif by == "xpath":
-                # Basic XPath support for common patterns
-                if "normalize-space()=" in value:
-                    # Extract text from normalize-space()='Text'
+                # Handle common XPath patterns
+                if "starts-with(@href," in value:
+                    # //a[starts-with(@href,'/user?id=')]
                     import re
-                    match = re.search(r"normalize-space\(\)='([^']+)'", value)
+                    match = re.search(r"starts-with\(@href,'([^']+)'\)", value)
                     if match:
-                        text = match.group(1)
-                        element = soup.find(string=lambda s: text in s.strip() if s else False)
-                    else:
-                        element = None
+                        prefix = match.group(1)
+                        elements = [a for a in soup.find_all('a') if a.get('href', '').startswith(prefix)]
+                elif "@href" in value and "=" in value:
+                    # //a[contains(@href, 'something')]
+                    elements = soup.find_all('a')
                 else:
-                    element = None
+                    elements = soup.find_all('a')
             else:
-                element = soup.find(attrs={by: value})
+                elements = soup.find_all(attrs={by: value})
             
-            if element:
-                print(f"  [HTML] Found {by}: {value}")
-                mock_elem = MockElement(element, self.session)
-                mock_elem._driver = self  # Pass driver reference for navigation
-                return mock_elem
-            else:
-                print(f"  [HTML] Not found {by}: {value}")
-                raise Exception(f"Element not found: {by}={value}")
+            # Return MockElement wrappers
+            result = []
+            for elem in elements:
+                if elem:
+                    mock_elem = MockElement(elem, self.session)
+                    mock_elem._driver = self
+                    result.append(mock_elem)
+            
+            print(f"  [HTML] Found {len(result)} element(s) with {by}: {value}")
+            return result
         except Exception as e:
-            print(f"  [HTML] Error: {str(e)[:50]}")
-            raise
+            print(f"  [HTML] Error finding elements: {str(e)[:50]}")
+            return []
 
     def execute_script(self, script, *args):
         """Execute JavaScript (limited support)."""
