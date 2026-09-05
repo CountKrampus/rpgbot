@@ -189,6 +189,11 @@ class HeadlessDriver:
         """Set timeout (handled by requests)."""
         pass
 
+    @property
+    def page_source(self):
+        """Get current page HTML source."""
+        return self.html_content
+
 
 class MockElement:
     """Real HTML element from BeautifulSoup."""
