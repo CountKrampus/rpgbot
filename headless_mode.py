@@ -19,6 +19,7 @@ class HeadlessDriver:
         self.closed = False
         self.session = requests.Session()
         self.html_content = ""
+        self.form_data = {}  # Track form fields
         
         # Set user agent to look like a real browser
         self.session.headers.update({
@@ -100,25 +101,52 @@ class HeadlessDriver:
         
         # Handle click simulation
         if "arguments[0].click()" in script or "click();" in script:
-            print(f"  [JS] Click detected, navigating to login page")
-            # Just navigate to the login page
-            try:
-                login_url = "https://eclipserpg.com/login"
-                response = self.session.get(login_url, timeout=10)
-                self.current_url = login_url
-                self.html_content = response.text
-                
-                # Update title
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(response.text, 'html.parser')
-                title_tag = soup.find('title')
-                self.title = title_tag.text if title_tag else "No Title"
-                
-                print(f"  [JS] Navigated to login page (Status: {response.status_code})")
-                return True
-            except Exception as e:
-                print(f"  [JS] Navigation failed: {e}")
-                return True
+            print(f"  [JS] Click detected")
+            # Check if we have form data to submit
+            if self.form_data:
+                print(f"  [JS] Submitting form with data: {list(self.form_data.keys())}")
+                try:
+                    # POST to login endpoint
+                    response = self.session.post(
+                        "https://eclipserpg.com/login",
+                        data=self.form_data,
+                        timeout=10
+                    )
+                    self.current_url = response.url
+                    self.html_content = response.text
+                    
+                    # Update title
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    title_tag = soup.find('title')
+                    self.title = title_tag.text if title_tag else "No Title"
+                    
+                    print(f"  [JS] Form submitted (Status: {response.status_code}, URL: {response.url})")
+                    self.form_data = {}  # Clear form data
+                    return True
+                except Exception as e:
+                    print(f"  [JS] Form submission failed: {e}")
+                    return True
+            else:
+                # No form data, just navigate to login
+                print(f"  [JS] No form data, navigating to login page")
+                try:
+                    login_url = "https://eclipserpg.com/login"
+                    response = self.session.get(login_url, timeout=10)
+                    self.current_url = login_url
+                    self.html_content = response.text
+                    
+                    # Update title
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    title_tag = soup.find('title')
+                    self.title = title_tag.text if title_tag else "No Title"
+                    
+                    print(f"  [JS] Navigated to login page (Status: {response.status_code})")
+                    return True
+                except Exception as e:
+                    print(f"  [JS] Navigation failed: {e}")
+                    return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
@@ -171,6 +199,10 @@ class MockElement:
     def send_keys(self, text):
         """Type text (simulate form input)."""
         print(f"  [TYPE] Would type: {text}")
+        # Track form data
+        input_name = self.element.get('name') or self.element.get('id')
+        if input_name and hasattr(self, '_driver'):
+            self._driver.form_data[input_name] = text
         return True
 
     def get_attribute(self, attr):
