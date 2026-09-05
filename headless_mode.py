@@ -78,7 +78,9 @@ class HeadlessDriver:
             
             if element:
                 print(f"  [HTML] Found {by}: {value}")
-                return MockElement(element, self.session)
+                mock_elem = MockElement(element, self.session)
+                mock_elem._driver = self  # Pass driver reference for navigation
+                return mock_elem
             else:
                 print(f"  [HTML] Not found {by}: {value}")
                 raise Exception(f"Element not found: {by}={value}")
@@ -121,8 +123,26 @@ class MockElement:
         """Click element (follow link if available)."""
         href = self.element.get('href')
         if href:
-            print(f"  [CLICK] Would follow: {href}")
-            return True
+            print(f"  [CLICK] Following link: {href}")
+            # Navigate using the session
+            try:
+                from urllib.parse import urljoin
+                full_url = urljoin(self._driver.current_url, href)
+                response = self._driver.session.get(full_url, timeout=10)
+                self._driver.current_url = full_url
+                self._driver.html_content = response.text
+                
+                # Update title
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                title_tag = soup.find('title')
+                self._driver.title = title_tag.text if title_tag else "No Title"
+                
+                print(f"  [CLICK] Navigated (Status: {response.status_code})")
+                return True
+            except Exception as e:
+                print(f"  [CLICK] Navigation failed: {str(e)[:50]}")
+                return False
         print(f"  [CLICK] Element has no link")
         return False
 
