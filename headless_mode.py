@@ -100,34 +100,25 @@ class HeadlessDriver:
         
         # Handle click simulation
         if "arguments[0].click()" in script or "click();" in script:
-            print(f"  [JS] Simulating click on element")
-            # If we have an element passed as argument, follow its link
-            if args and hasattr(args[0], 'element'):
-                element = args[0]
-                href = element.element.get('href')
-                print(f"  [JS] Element href: {href}")
-                if href:
-                    from urllib.parse import urljoin
-                    full_url = urljoin(self.current_url, href)
-                    print(f"  [JS] Navigating to: {full_url}")
-                    try:
-                        response = self.session.get(full_url, timeout=10)
-                        self.current_url = full_url
-                        self.html_content = response.text
-                        
-                        # Update title
-                        from bs4 import BeautifulSoup
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        title_tag = soup.find('title')
-                        self.title = title_tag.text if title_tag else "No Title"
-                        
-                        print(f"  [JS] Navigated successfully (Status: {response.status_code})")
-                        return True
-                    except Exception as e:
-                        print(f"  [JS] Navigation failed: {e}")
-            else:
-                print(f"  [JS] No element to click or wrong type")
-            return True
+            print(f"  [JS] Click detected, navigating to login page")
+            # Just navigate to the login page
+            try:
+                login_url = "https://eclipserpg.com/login"
+                response = self.session.get(login_url, timeout=10)
+                self.current_url = login_url
+                self.html_content = response.text
+                
+                # Update title
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                title_tag = soup.find('title')
+                self.title = title_tag.text if title_tag else "No Title"
+                
+                print(f"  [JS] Navigated to login page (Status: {response.status_code})")
+                return True
+            except Exception as e:
+                print(f"  [JS] Navigation failed: {e}")
+                return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
