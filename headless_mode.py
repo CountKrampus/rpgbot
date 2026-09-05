@@ -39,6 +39,20 @@ class HeadlessDriver:
             title_tag = soup.find('title')
             self.title = title_tag.text if title_tag else "No Title"
             
+            # Extract CSRF token and other hidden fields
+            token_input = soup.find('input', {'name': 'token'})
+            if token_input:
+                token_value = token_input.get('value')
+                if token_value:
+                    self.form_data['token'] = token_value
+                    print(f"  [HTTP] Extracted CSRF token")
+            
+            submit_input = soup.find('input', {'name': 'L_Submit'})
+            if submit_input:
+                submit_value = submit_input.get('value', '1')
+                self.form_data['L_Submit'] = submit_value
+                print(f"  [HTTP] Extracted L_Submit={submit_value}")
+            
             print(f"  [HTTP] Status: {response.status_code}")
             return True
         except Exception as e:
