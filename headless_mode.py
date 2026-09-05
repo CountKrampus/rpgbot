@@ -139,7 +139,20 @@ class MockElement:
 
     def is_displayed(self):
         """Check if element is displayed."""
-        # In headless mode, assume elements are displayed if they exist
+        return True
+
+    def is_enabled(self):
+        """Check if element is enabled."""
+        return True
+
+    def submit(self):
+        """Submit form."""
+        print(f"  [SUBMIT] Would submit form")
+        return True
+
+    def clear(self):
+        """Clear element value."""
+        print(f"  [CLEAR] Would clear element")
         return True
 
     @property
