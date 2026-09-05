@@ -21,6 +21,7 @@ class HeadlessDriver:
         self.html_content = ""
         self.form_data = {}  # Track form fields
         self.last_clicked_element = None  # Track last clicked element
+        self.found_elements = {}  # Store found elements by text for tracking
         
         # Set user agent to look like a real browser
         self.session.headers.update({
@@ -108,6 +109,11 @@ class HeadlessDriver:
                     mock_elem = MockElement(elem, self.session)
                     mock_elem._driver = self
                     result.append(mock_elem)
+                    
+                    # Store element for click tracking
+                    elem_text = elem.get_text(strip=True) if hasattr(elem, 'get_text') else str(elem.string)
+                    if elem_text:
+                        self.found_elements[elem_text[:50]] = elem
             
             print(f"  [HTML] Found {len(result)} element(s) with {by}: {value}")
             return result
@@ -153,32 +159,44 @@ class HeadlessDriver:
                 except Exception as e:
                     print(f"  [JS] Form submission failed: {e}")
                     return True
-            elif self.last_clicked_element:
-                # Use the last clicked element's href
-                href = self.last_clicked_element.get('href')
-                if href:
-                    print(f"  [JS] Navigating to clicked link: {href}")
-                    try:
-                        from urllib.parse import urljoin
-                        full_url = urljoin(self.current_url, href)
-                        response = self.session.get(full_url, timeout=10)
-                        self.current_url = response.url
-                        self.html_content = response.text
-                        
-                        # Update title
-                        from bs4 import BeautifulSoup
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        title_tag = soup.find('title')
-                        self.title = title_tag.text if title_tag else "No Title"
-                        
-                        print(f"  [JS] Navigated to {full_url}")
-                        self.last_clicked_element = None
-                        return True
-                    except Exception as e:
-                        print(f"  [JS] Navigation failed: {e}")
+            elif self.last_clicked_element or any("Log In" in key for key in self.found_elements):
+                # Try to find the clicked element
+                clicked_elem = self.last_clicked_element
+                if not clicked_elem and "Log In" in str(self.found_elements):
+                    # Find Log In link
+                    for key, elem in self.found_elements.items():
+                        if "Log In" in key:
+                            clicked_elem = elem
+                            break
+                
+                if clicked_elem:
+                    href = clicked_elem.get('href')
+                    if href:
+                        print(f"  [JS] Navigating to clicked link: {href}")
+                        try:
+                            from urllib.parse import urljoin
+                            full_url = urljoin(self.current_url, href)
+                            response = self.session.get(full_url, timeout=10)
+                            self.current_url = response.url
+                            self.html_content = response.text
+                            
+                            # Update title
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(response.text, 'html.parser')
+                            title_tag = soup.find('title')
+                            self.title = title_tag.text if title_tag else "No Title"
+                            
+                            print(f"  [JS] Navigated to {full_url}")
+                            self.last_clicked_element = None
+                            return True
+                        except Exception as e:
+                            print(f"  [JS] Navigation failed: {e}")
+                            return True
+                    else:
+                        print(f"  [JS] Clicked element has no href")
                         return True
                 else:
-                    print(f"  [JS] Clicked element has no href")
+                    print(f"  [JS] Could not find clicked element")
                     return True
             else:
                 print(f"  [JS] No form data or clicked element")
