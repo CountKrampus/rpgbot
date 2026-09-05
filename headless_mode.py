@@ -92,11 +92,38 @@ class HeadlessDriver:
         """Execute JavaScript (limited support)."""
         # Handle common JS checks
         if "return document.readyState" in script:
-            return "complete"  # Pretend page is ready
+            return "complete"
         if "return document.title" in script:
             return self.title
         if "return window.location" in script:
             return {"href": self.current_url}
+        
+        # Handle click simulation
+        if "arguments[0].click()" in script or "click();" in script:
+            print(f"  [JS] Simulating click on element")
+            # If we have an element passed as argument, follow its link
+            if args and hasattr(args[0], 'element'):
+                element = args[0]
+                href = element.element.get('href')
+                if href:
+                    from urllib.parse import urljoin
+                    full_url = urljoin(self.current_url, href)
+                    try:
+                        response = self.session.get(full_url, timeout=10)
+                        self.current_url = full_url
+                        self.html_content = response.text
+                        
+                        # Update title
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        title_tag = soup.find('title')
+                        self.title = title_tag.text if title_tag else "No Title"
+                        
+                        print(f"  [JS] Navigated to {full_url}")
+                        return True
+                    except Exception as e:
+                        print(f"  [JS] Navigation failed: {e}")
+            return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
