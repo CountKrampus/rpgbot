@@ -20,6 +20,7 @@ class HeadlessDriver:
         self.session = requests.Session()
         self.html_content = ""
         self.form_data = {}  # Track form fields
+        self.last_clicked_element = None  # Track last clicked element
         
         # Set user agent to look like a real browser
         self.session.headers.update({
@@ -152,10 +153,35 @@ class HeadlessDriver:
                 except Exception as e:
                     print(f"  [JS] Form submission failed: {e}")
                     return True
+            elif self.last_clicked_element:
+                # Use the last clicked element's href
+                href = self.last_clicked_element.get('href')
+                if href:
+                    print(f"  [JS] Navigating to clicked link: {href}")
+                    try:
+                        from urllib.parse import urljoin
+                        full_url = urljoin(self.current_url, href)
+                        response = self.session.get(full_url, timeout=10)
+                        self.current_url = response.url
+                        self.html_content = response.text
+                        
+                        # Update title
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        title_tag = soup.find('title')
+                        self.title = title_tag.text if title_tag else "No Title"
+                        
+                        print(f"  [JS] Navigated to {full_url}")
+                        self.last_clicked_element = None
+                        return True
+                    except Exception as e:
+                        print(f"  [JS] Navigation failed: {e}")
+                        return True
+                else:
+                    print(f"  [JS] Clicked element has no href")
+                    return True
             else:
-                # Not a form submission - check if we're clicking a link
-                # The last clicked element should have an href
-                print(f"  [JS] Navigating based on click")
+                print(f"  [JS] No form data or clicked element")
                 return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
@@ -189,6 +215,7 @@ class MockElement:
         href = self.element.get('href')
         if href and hasattr(self, '_driver'):
             print(f"  [CLICK] Following link: {href}")
+            self._driver.last_clicked_element = self.element
             try:
                 from urllib.parse import urljoin
                 full_url = urljoin(self._driver.current_url, href)
@@ -208,6 +235,8 @@ class MockElement:
                 print(f"  [CLICK] Navigation failed: {e}")
                 return False
         if href:
+            if hasattr(self, '_driver'):
+                self._driver.last_clicked_element = self.element
             print(f"  [CLICK] Would follow: {href}")
             return True
         print(f"  [CLICK] Element has no link")
