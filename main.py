@@ -54,9 +54,13 @@ def main():
         loaded_settings = settings.load_settings()
         browser_choice = loaded_settings.get("browser_name", "auto")
         
-        # On Termux, if user explicitly chose headless or android-cdp, respect that
-        # Only override auto/brave/chrome/chromium
-        if PlatformDetector.is_termux() and browser_choice in (
+        # TEMPORARY: Force headless on Android (check home path directly)
+        import os
+        home = os.path.expanduser("~")
+        if "/data/data/com.termux" in home:
+            browser_choice = "headless"
+            print("[DEBUG] Using headless (detected Termux)\n")
+        elif PlatformDetector.is_termux() and browser_choice in (
             "auto",
             "brave",
             "chrome",
