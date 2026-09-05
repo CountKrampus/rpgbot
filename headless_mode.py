@@ -137,6 +137,11 @@ class MockElement:
         print(f"  [ATTR] {attr}={value}")
         return value
 
+    def is_displayed(self):
+        """Check if element is displayed."""
+        # In headless mode, assume elements are displayed if they exist
+        return True
+
     @property
     def text(self):
         """Get element text."""
