@@ -186,6 +186,21 @@ class HeadlessDriver:
                             title_tag = soup.find('title')
                             self.title = title_tag.text if title_tag else "No Title"
                             
+                            # Extract CSRF token if on login page
+                            if '/login' in full_url:
+                                token_input = soup.find('input', {'name': 'token'})
+                                if token_input:
+                                    token_value = token_input.get('value')
+                                    if token_value:
+                                        self.form_data['token'] = token_value
+                                        print(f"  [JS] Extracted CSRF token")
+                                
+                                submit_input = soup.find('input', {'name': 'L_Submit'})
+                                if submit_input:
+                                    submit_value = submit_input.get('value', '1')
+                                    self.form_data['L_Submit'] = submit_value
+                                    print(f"  [JS] Extracted L_Submit={submit_value}")
+                            
                             print(f"  [JS] Navigated to {full_url}")
                             self.last_clicked_element = None
                             return True
