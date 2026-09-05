@@ -105,9 +105,11 @@ class HeadlessDriver:
             if args and hasattr(args[0], 'element'):
                 element = args[0]
                 href = element.element.get('href')
+                print(f"  [JS] Element href: {href}")
                 if href:
                     from urllib.parse import urljoin
                     full_url = urljoin(self.current_url, href)
+                    print(f"  [JS] Navigating to: {full_url}")
                     try:
                         response = self.session.get(full_url, timeout=10)
                         self.current_url = full_url
@@ -119,10 +121,12 @@ class HeadlessDriver:
                         title_tag = soup.find('title')
                         self.title = title_tag.text if title_tag else "No Title"
                         
-                        print(f"  [JS] Navigated to {full_url}")
+                        print(f"  [JS] Navigated successfully (Status: {response.status_code})")
                         return True
                     except Exception as e:
                         print(f"  [JS] Navigation failed: {e}")
+            else:
+                print(f"  [JS] No element to click or wrong type")
             return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
