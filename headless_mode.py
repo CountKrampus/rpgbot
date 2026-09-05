@@ -88,6 +88,14 @@ class HeadlessDriver:
 
     def execute_script(self, script, *args):
         """Execute JavaScript (limited support)."""
+        # Handle common JS checks
+        if "return document.readyState" in script:
+            return "complete"  # Pretend page is ready
+        if "return document.title" in script:
+            return self.title
+        if "return window.location" in script:
+            return {"href": self.current_url}
+        
         print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
 
