@@ -59,6 +59,13 @@ class HeadlessDriver:
             print(f"  [HTTP] Error: {str(e)[:50]}")
             return False
 
+    def find_element(self, by, value):
+        """Find single element in HTML."""
+        elements = self.find_elements(by, value)
+        if elements:
+            return elements[0]
+        raise Exception(f"Element not found: {by}={value}")
+
     def find_elements(self, by, value):
         """Find multiple elements in HTML."""
         try:
