@@ -128,7 +128,7 @@ class HeadlessDriver:
         if "arguments[0].click()" in script or "click();" in script:
             print(f"  [JS] Click detected")
             # Check if we have form data to submit
-            if self.form_data:
+            if self.form_data and ('L_UserID' in self.form_data or 'L_Password' in self.form_data):
                 print(f"  [JS] Submitting form with data: {list(self.form_data.keys())}")
                 try:
                     # POST to login endpoint
@@ -153,39 +153,10 @@ class HeadlessDriver:
                     print(f"  [JS] Form submission failed: {e}")
                     return True
             else:
-                # No form data, just navigate to login
-                print(f"  [JS] No form data, navigating to login page")
-                try:
-                    login_url = "https://eclipserpg.com/login"
-                    response = self.session.get(login_url, timeout=10)
-                    self.current_url = login_url
-                    self.html_content = response.text
-                    
-                    # Update title
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    title_tag = soup.find('title')
-                    self.title = title_tag.text if title_tag else "No Title"
-                    
-                    # Extract CSRF token
-                    token_input = soup.find('input', {'name': 'token'})
-                    if token_input:
-                        token_value = token_input.get('value')
-                        if token_value:
-                            self.form_data['token'] = token_value
-                            print(f"  [JS] Extracted CSRF token")
-                    
-                    submit_input = soup.find('input', {'name': 'L_Submit'})
-                    if submit_input:
-                        submit_value = submit_input.get('value', '1')
-                        self.form_data['L_Submit'] = submit_value
-                        print(f"  [JS] Extracted L_Submit={submit_value}")
-                    
-                    print(f"  [JS] Navigated to login page (Status: {response.status_code})")
-                    return True
-                except Exception as e:
-                    print(f"  [JS] Navigation failed: {e}")
-                    return True
+                # Not a form submission - check if we're clicking a link
+                # The last clicked element should have an href
+                print(f"  [JS] Navigating based on click")
+                return True
         
         print(f"  [JS] Would execute: {script[:50]}...")
         return "test_result"
@@ -216,14 +187,13 @@ class MockElement:
     def click(self):
         """Click element (follow link if available)."""
         href = self.element.get('href')
-        if href:
+        if href and hasattr(self, '_driver'):
             print(f"  [CLICK] Following link: {href}")
-            # Navigate using the session
             try:
                 from urllib.parse import urljoin
                 full_url = urljoin(self._driver.current_url, href)
                 response = self._driver.session.get(full_url, timeout=10)
-                self._driver.current_url = full_url
+                self._driver.current_url = response.url
                 self._driver.html_content = response.text
                 
                 # Update title
@@ -232,11 +202,14 @@ class MockElement:
                 title_tag = soup.find('title')
                 self._driver.title = title_tag.text if title_tag else "No Title"
                 
-                print(f"  [CLICK] Navigated (Status: {response.status_code})")
+                print(f"  [CLICK] Navigated to {full_url} (Status: {response.status_code})")
                 return True
             except Exception as e:
-                print(f"  [CLICK] Navigation failed: {str(e)[:50]}")
+                print(f"  [CLICK] Navigation failed: {e}")
                 return False
+        if href:
+            print(f"  [CLICK] Would follow: {href}")
+            return True
         print(f"  [CLICK] Element has no link")
         return False
 
