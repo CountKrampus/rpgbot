@@ -1983,8 +1983,8 @@ class BrowserManager:
                     driver = create_headless_driver(instance_name)
                 elif selected_name == "android-cdp":
                     try:
-                        from android_browser import AndroidBrowser
-                        driver = AndroidBrowser(instance_name)
+                        from android_browser import AndroidBrowserManager
+                        driver = AndroidBrowserManager(instance_name)
                     except ImportError as e:
                         raise ImportError(f"android_browser module not available: {e}")
                 elif selected_name == "termux":
