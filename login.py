@@ -418,6 +418,11 @@ def login(
     )
 
     try:
+        # Test if driver is responsive
+        print("[DEBUG] Testing driver connection...")
+        _ = driver.current_url
+        print("[DEBUG] Driver is responsive")
+        
         driver.get(BASE_URL)
 
         wait_for_document_ready(driver)
