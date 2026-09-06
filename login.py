@@ -424,6 +424,7 @@ def login(
         print("[DEBUG] Driver is responsive")
         
         print("[DEBUG] Navigating to BASE_URL...")
+        driver.set_page_load_timeout(10)  # 10 second timeout
         driver.get(BASE_URL)
         print(f"[DEBUG] Navigated. URL: {driver.current_url}")
 
@@ -435,6 +436,7 @@ def login(
         time.sleep(1)
 
     except Exception as e:
+        print(f"[DEBUG] Exception during navigation: {e}")
         _print_status(
             "✗",
             f"Could not open Eclipse RPG: {e}",
