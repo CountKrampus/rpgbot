@@ -423,9 +423,14 @@ def login(
         _ = driver.current_url
         print("[DEBUG] Driver is responsive")
         
+        print("[DEBUG] Navigating to BASE_URL...")
         driver.get(BASE_URL)
+        print(f"[DEBUG] Navigated. URL: {driver.current_url}")
 
-        wait_for_document_ready(driver)
+        try:
+            wait_for_document_ready(driver)
+        except Exception as e:
+            print(f"[DEBUG] wait_for_document_ready timeout (continuing anyway): {e}")
 
         time.sleep(1)
 
