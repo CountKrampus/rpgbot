@@ -431,16 +431,14 @@ def _train_until_level_menu(driver):
         f"  {KEY_COLOR}Target level:{RESET} "
     ).strip()
 
-    try:
+    # Use NumberParser to handle k/m/b formats
+    from number_parser import NumberParser
+    target_level = NumberParser.parse(target_level_input)
 
-        target_level = int(
-            target_level_input
-        )
-
-    except ValueError:
+    if target_level is None:
 
         _error(
-            "Invalid level number."
+            "Invalid level number. Use formats: 450000, 450k, 1.5m, 5b"
         )
 
         return
