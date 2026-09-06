@@ -163,11 +163,27 @@ class HeadlessDriver:
                 # Try to find the clicked element
                 clicked_elem = self.last_clicked_element
                 
-                # If no direct element, try to find it in found_elements
-                # Look for the most recently added element (last one stored)
+                # If no direct element, search for specific links by their text
                 if not clicked_elem and self.found_elements:
-                    # Get the last element added (most recent click)
-                    clicked_elem = list(self.found_elements.values())[-1] if self.found_elements else None
+                    # Try to find "Log In" link first (most common click)
+                    for key, elem in self.found_elements.items():
+                        if "Log In" in key or "Log In" in str(elem.get_text(strip=True) if hasattr(elem, 'get_text') else ''):
+                            clicked_elem = elem
+                            print(f"  [JS] Found Log In link: {key}")
+                            break
+                    
+                    # If still not found, try Your Profile
+                    if not clicked_elem:
+                        for key, elem in self.found_elements.items():
+                            if "Your Profile" in key or "user?id=" in str(elem.get('href', '')):
+                                clicked_elem = elem
+                                print(f"  [JS] Found Your Profile link: {key}")
+                                break
+                    
+                    # If still not found, use last element as fallback
+                    if not clicked_elem and self.found_elements:
+                        clicked_elem = list(self.found_elements.values())[-1]
+                        print(f"  [JS] Using last found element as fallback")
                 
                 if clicked_elem:
                     href = clicked_elem.get('href')
