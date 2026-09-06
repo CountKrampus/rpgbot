@@ -20,6 +20,12 @@ from selenium.common.exceptions import WebDriverException
 from config import WAIT_MEDIUM
 from helpers import wait_for_document_ready
 
+# Android CDP support
+try:
+    from android_browser import AndroidBrowser
+except ImportError:
+    AndroidBrowser = None
+
 
 # ============================================================
 # ANSI COLOR PALETTE
@@ -121,13 +127,7 @@ CHROMIUM_PATHS = [
     / "chrome.exe",
 ]
 
-SUPPORTED_BROWSERS = (
-    "brave",
-    "chrome",
-    "chromium",
-    "termux",
-    "headless",
-)
+
 
 AUTO_DETECT_ORDER = (
     "brave",
@@ -140,6 +140,7 @@ BROWSER_LABELS = {
     "brave": "Brave Browser",
     "chrome": "Google Chrome",
     "chromium": "Chromium",
+    "android-cdp": "Android Chrome/Brave (CDP)",
     "termux": "Termux Chromium (headless)",
     "headless": "Headless Test Driver",
 }
@@ -577,6 +578,9 @@ def resolve_browser(
 
     if requested_name == "headless":
         return "headless", None
+
+    if requested_name == "android-cdp":
+        return "android-cdp", None
 
     if requested_name == "termux":
         path = find_browser_executable("termux")
@@ -1976,6 +1980,10 @@ class BrowserManager:
                     from headless_mode import create_headless_driver
 
                     driver = create_headless_driver(instance_name)
+                elif selected_name == "android-cdp":
+                    if AndroidBrowser is None:
+                        raise ImportError("android_browser module not available")
+                    driver = AndroidBrowser(instance_name)
                 elif selected_name == "termux":
                     driver = _create_termux_driver(
                         launch_profile,
