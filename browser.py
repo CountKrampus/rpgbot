@@ -23,7 +23,10 @@ from helpers import wait_for_document_ready
 # Android CDP support
 try:
     from android_browser import AndroidBrowser
-except ImportError:
+    ANDROID_CDP_AVAILABLE = True
+except ImportError as e:
+    ANDROID_CDP_AVAILABLE = False
+    print(f"[WARNING] android_browser import failed: {e}")
     AndroidBrowser = None
 
 
