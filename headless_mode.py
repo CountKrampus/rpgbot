@@ -159,15 +159,15 @@ class HeadlessDriver:
                 except Exception as e:
                     print(f"  [JS] Form submission failed: {e}")
                     return True
-            elif self.last_clicked_element or any("Log In" in key for key in self.found_elements):
+            elif self.last_clicked_element or self.found_elements:
                 # Try to find the clicked element
                 clicked_elem = self.last_clicked_element
-                if not clicked_elem and "Log In" in str(self.found_elements):
-                    # Find Log In link
-                    for key, elem in self.found_elements.items():
-                        if "Log In" in key:
-                            clicked_elem = elem
-                            break
+                
+                # If no direct element, try to find it in found_elements
+                # Look for the most recently added element (last one stored)
+                if not clicked_elem and self.found_elements:
+                    # Get the last element added (most recent click)
+                    clicked_elem = list(self.found_elements.values())[-1] if self.found_elements else None
                 
                 if clicked_elem:
                     href = clicked_elem.get('href')
@@ -203,6 +203,7 @@ class HeadlessDriver:
                             
                             print(f"  [JS] Navigated to {full_url}")
                             self.last_clicked_element = None
+                            self.found_elements.clear()  # Clear found elements after navigation
                             return True
                         except Exception as e:
                             print(f"  [JS] Navigation failed: {e}")
