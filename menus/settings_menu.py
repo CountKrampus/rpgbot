@@ -94,6 +94,10 @@ from cancellation import (
     set_cancel_key,
 )
 
+from discord_settings import (
+    show_discord_menu,
+)
+
 
 # ============================================================
 # CONSOLE INITIALIZATION
@@ -2249,18 +2253,24 @@ def settings_menu(driver):
 
         _option(
             "11",
+            "Discord Notifications",
+            "configure Discord webhook alerts",
+        )
+
+        _option(
+            "12",
             "Export Settings",
             "write a portable JSON copy",
         )
 
         _option(
-            "12",
+            "13",
             "Import Settings",
             "load a JSON copy",
         )
 
         _option(
-            "13",
+            "14",
             "Back",
         )
 
@@ -2311,6 +2321,10 @@ def settings_menu(driver):
             _reset_settings()
 
         elif choice == "11":
+
+            show_discord_menu()
+
+        elif choice == "12":
             path = input(
                 f"\n{KEY_COLOR}Export path (blank to cancel):{RESET} "
             ).strip()
@@ -2323,7 +2337,7 @@ def settings_menu(driver):
                 _success(message) if "exported" in message else _error(message)
                 _pause("Press Enter to return to settings...")
 
-        elif choice == "12":
+        elif choice == "13":
             path = input(
                 f"\n{KEY_COLOR}Import path (blank to cancel):{RESET} "
             ).strip()
@@ -2336,7 +2350,7 @@ def settings_menu(driver):
                 _success(message) if "imported" in message else _error(message)
                 _pause("Press Enter to return to settings...")
 
-        elif choice == "13":
+        elif choice == "14":
 
             return
 
