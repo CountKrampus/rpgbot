@@ -20,15 +20,6 @@ from selenium.common.exceptions import WebDriverException
 from config import WAIT_MEDIUM
 from helpers import wait_for_document_ready
 
-# Android CDP support
-try:
-    from android_browser import AndroidBrowser
-    ANDROID_CDP_AVAILABLE = True
-except ImportError as e:
-    ANDROID_CDP_AVAILABLE = False
-    print(f"[WARNING] android_browser import failed: {e}")
-    AndroidBrowser = None
-
 
 # ============================================================
 # ANSI COLOR PALETTE
@@ -1991,9 +1982,11 @@ class BrowserManager:
 
                     driver = create_headless_driver(instance_name)
                 elif selected_name == "android-cdp":
-                    if AndroidBrowser is None:
-                        raise ImportError("android_browser module not available")
-                    driver = AndroidBrowser(instance_name)
+                    try:
+                        from android_browser import AndroidBrowser
+                        driver = AndroidBrowser(instance_name)
+                    except ImportError as e:
+                        raise ImportError(f"android_browser module not available: {e}")
                 elif selected_name == "termux":
                     driver = _create_termux_driver(
                         launch_profile,
