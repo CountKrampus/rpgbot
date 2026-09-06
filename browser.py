@@ -127,7 +127,14 @@ CHROMIUM_PATHS = [
     / "chrome.exe",
 ]
 
-
+SUPPORTED_BROWSERS = (
+    "brave",
+    "chrome",
+    "chromium",
+    "android-cdp",
+    "termux",
+    "headless",
+)
 
 AUTO_DETECT_ORDER = (
     "brave",
