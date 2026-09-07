@@ -2121,7 +2121,14 @@ def run_searches(
     area=None,
     target_pokemon=None,
     duration_seconds=None,
+    account_name=None,
 ):
+
+    # Initialize Discord notifications
+    from searching_notifications_integration import SearchingNotifier
+    notifier = SearchingNotifier(account_name) if account_name else None
+    if notifier and notifier.is_enabled():
+        print("  ✅ Discord notifications enabled")
 
     print()
     print(
@@ -2315,6 +2322,11 @@ def run_searches(
         completed += 1
         search_number += 1
 
+        # Send Discord notification at configured intervals
+        if notifier:
+            searches_per_hour = (completed / (time.time() - started_at)) * 3600 if (time.time() - started_at) > 0 else 0
+            notifier.on_search_complete(completed, 0, searches_per_hour)  # 0 = items_found (would need to track separately)
+
         if cancel_after_current:
             break
 
@@ -2328,6 +2340,15 @@ def run_searches(
         map_name,
         completed
     )
+
+    # Send completion notification
+    if notifier:
+        duration_seconds = time.time() - started_at
+        hours = int(duration_seconds // 3600)
+        minutes = int((duration_seconds % 3600) // 60)
+        seconds = int(duration_seconds % 60)
+        duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+        notifier.on_searching_complete(completed, 0, duration_str)
 
     return not cancel_after_current
 
