@@ -445,14 +445,14 @@ def main_menu(driver, account=None):
         # ----------------------------------------------------
         if choice == "1":
             with automation_task():
-                training_menu(driver)
+                training_menu(driver, account)
 
         # ----------------------------------------------------
         # SEARCHING
         # ----------------------------------------------------
         elif choice == "2":
             with automation_task():
-                search_menu(driver)
+                search_menu(driver, account)
 
         # ----------------------------------------------------
         # A-MINER

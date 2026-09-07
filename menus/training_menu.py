@@ -323,7 +323,7 @@ def set_difficulty_setting(value):
 # START TRAINING
 # ============================================================
 
-def _start_training(driver):
+def _start_training(driver, account=None):
 
     global _last_session_result
 
@@ -364,6 +364,7 @@ def _start_training(driver):
         driver,
         max_battles=_battle_count_setting,
         difficulty=_difficulty_setting,
+        account_name=account,
     )
 
     _last_session_result = result
@@ -414,7 +415,7 @@ def _start_training(driver):
 # TRAIN UNTIL LEVEL
 # ============================================================
 
-def _train_until_level_menu(driver):
+def _train_until_level_menu(driver, account=None):
 
     global _last_session_result
 
@@ -536,6 +537,7 @@ def _train_until_level_menu(driver):
         target_level=target_level,
         max_battles=max_safety_battles,
         difficulty=_difficulty_setting,
+        account_name=account,
     )
 
     _last_session_result = result
@@ -1090,7 +1092,7 @@ def _training_status():
 # TRAINING MENU
 # ============================================================
 
-def training_menu(driver):
+def training_menu(driver, account=None):
 
     while True:
 
@@ -1259,7 +1261,8 @@ def training_menu(driver):
         if choice == "1":
 
             _start_training(
-                driver
+                driver,
+                account=account
             )
 
         # ----------------------------------------------------
@@ -1269,7 +1272,8 @@ def training_menu(driver):
         elif choice == "2":
 
             _train_until_level_menu(
-                driver
+                driver,
+                account=account
             )
 
         # ----------------------------------------------------

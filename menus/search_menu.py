@@ -277,7 +277,7 @@ def _search_box(driver):
     input(f"{GRAY}Press Enter to return to the search menu...{RESET}")
 
 
-def search_menu(driver):
+def search_menu(driver, account=None):
     w = 71
     top_border = f"{BORDER_COLOR}╔{'═' * w}╗{RESET}"
     mid_border = f"{BORDER_COLOR}╠{'═' * w}╣{RESET}"

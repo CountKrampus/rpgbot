@@ -1777,7 +1777,14 @@ def train_mode(
     max_battles=MAX_BATTLES,
     difficulty=None,
     duration_seconds=None,
+    account_name=None,
 ):
+
+    # Initialize Discord notifications
+    from training_notifications_integration import TrainingNotifier
+    notifier = TrainingNotifier(account_name) if account_name else None
+    if notifier and notifier.is_enabled():
+        print("  ✅ Discord notifications enabled")
 
     _print_training_box(
         "BATTLE TRAINING",
@@ -1963,6 +1970,12 @@ def train_mode(
                 "warning",
             )
 
+
+        # Send Discord notification at configured intervals
+        if notifier:
+            battles_per_hour = (battles_completed / (time.time() - started_at)) * 3600 if (time.time() - started_at) > 0 else 0
+            notifier.on_battle_complete(battles_completed, total_exp_gained, battles_per_hour)
+
         # ----------------------------------------------------
         # Current level.
         # ----------------------------------------------------
@@ -2044,6 +2057,15 @@ def train_mode(
             else "Training session summary"
         ),
     )
+
+    # Send completion notification
+    if notifier:
+        duration_seconds = time.time() - started_at
+        hours = int(duration_seconds // 3600)
+        minutes = int((duration_seconds % 3600) // 60)
+        seconds = int(duration_seconds % 60)
+        duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+        notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
 
     return {
         "battles": battles_completed,
