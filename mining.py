@@ -1308,6 +1308,7 @@ def miner_mode(
     queued_catch_pokemon=True,
     area=None,
     resource_target=None,
+    account_name=None,
 ):
 
     print()
@@ -1453,6 +1454,14 @@ def miner_mode(
         print("✗ Requested mining area was not found; continuing in current area.")
 
     stats = create_mining_stats()
+
+    # Initialize Discord notifications
+    from mining_notifications_integration import MiningNotifier
+    notifier = MiningNotifier(account_name) if account_name else None
+    if notifier and notifier.is_enabled():
+        print("  ✅ Discord notifications enabled")
+    
+    start_time = time.time()  # For speed calculation
 
     print()
     print(
@@ -1668,6 +1677,11 @@ def miner_mode(
                 f"{stats['mines']}/{target_mines}"
             )
 
+        # Send Discord notification at configured intervals
+        if notifier:
+            mines_per_hour = (stats["mines"] / (time.time() - start_time)) * 3600 if (time.time() - start_time) > 0 else 0
+            notifier.on_mine_complete(stats["mines"], stats.get("ore_collected", 0), mines_per_hour)
+
         # ----------------------------------------------------
         # Wait for Eclipse's result.
         # ----------------------------------------------------
@@ -1761,6 +1775,15 @@ def miner_mode(
     # --------------------------------------------------------
     # Final session report.
     # --------------------------------------------------------
+
+    # Send completion notification
+    if notifier:
+        duration_seconds = time.time() - start_time
+        hours = int(duration_seconds // 3600)
+        minutes = int((duration_seconds % 3600) // 60)
+        seconds = int(duration_seconds % 60)
+        duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+        notifier.on_mining_complete(stats["mines"], stats.get("ore_collected", 0), duration_str)
 
     print_mining_results(
         stats,
