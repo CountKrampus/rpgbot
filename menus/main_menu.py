@@ -459,7 +459,7 @@ def main_menu(driver, account=None):
         # ----------------------------------------------------
         elif choice == "3":
             with automation_task():
-                miner_mode(driver)
+                miner_mode(driver, account_name=account)
 
         # ----------------------------------------------------
         # TRADING
@@ -473,7 +473,7 @@ def main_menu(driver, account=None):
         # ----------------------------------------------------
         elif choice == "5":
             with automation_task():
-                queue_mode(driver)
+                queue_mode(driver, account)
 
         # ----------------------------------------------------
         # MESSAGES

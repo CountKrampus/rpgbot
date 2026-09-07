@@ -312,15 +312,16 @@ def _failure_action(step):
         print("✗ Choose retry, skip, or stop.")
 
 
-def _run_step(driver, step, duration):
+def _run_step(driver, step, duration, account_name=None):
     if step["type"] == "train":
-        train_mode(driver, duration_seconds=duration)
+        train_mode(driver, duration_seconds=duration, account_name=account_name)
         return
     if step["type"] == "mine":
         miner_mode(
             driver,
             queued_duration_seconds=duration,
             queued_catch_pokemon=step["catch"],
+            account_name=account_name,
         )
         return
     map_info = step["map"]
@@ -339,10 +340,11 @@ def _run_step(driver, step, duration):
         is_exclusive=map_info["is_exclusive"],
         area=map_info["area"],
         duration_seconds=duration,
+        account_name=account_name,
     )
 
 
-def _run_queue(driver, queue, repeats=1):
+def _run_queue(driver, queue, repeats=1, account_name=None):
     total_steps = len(queue) * repeats
     total_seconds = sum(step["minutes"] * 60 for step in queue) * repeats
     started = time.monotonic()
@@ -360,7 +362,7 @@ def _run_queue(driver, queue, repeats=1):
                     f"remaining {_format_duration(remaining)})"
                 )
                 try:
-                    _run_step(driver, step, step["minutes"] * 60)
+                    _run_step(driver, step, step["minutes"] * 60, account_name)
                     break
                 except Exception as error:
                     print(f"✗ {error}")
@@ -373,7 +375,7 @@ def _run_queue(driver, queue, repeats=1):
             completed += 1
 
 
-def queue_mode(driver):
+def queue_mode(driver, account=None):
     """Build and run a manually ordered sequence of timed tasks."""
     queue = _build_queue(driver)
     if not queue:
@@ -385,4 +387,4 @@ def queue_mode(driver):
         print("Queue cancelled.")
         return
 
-    _run_queue(driver, queue, max(1, int(getattr(queue, "repeats", 1))))
+    _run_queue(driver, queue, max(1, int(getattr(queue, "repeats", 1))), account)
