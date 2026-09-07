@@ -1378,7 +1378,14 @@ def train_until_level(
     target_level,
     max_battles=MAX_LEVEL_BATTLES,
     difficulty=None,
+    account_name=None,
 ):
+
+    # Initialize Discord notifications
+    from training_notifications_integration import TrainingNotifier
+    notifier = TrainingNotifier(account_name) if account_name else None
+    if notifier and notifier.is_enabled():
+        print("  ✅ Discord notifications enabled")
 
     _print_training_box(
         "TRAIN UNTIL LEVEL",
@@ -1488,6 +1495,8 @@ def train_until_level(
     battles_completed = 0
     total_exp_gained = 0
     cancelled = False
+    
+    start_time = time.time()  # For speed calculation in notifications
 
     last_level_gain = None
 
@@ -1595,6 +1604,12 @@ def train_until_level(
                 "Could not read EXP gain.",
                 "warning",
             )
+
+
+        # Send Discord notification at configured intervals
+        if notifier:
+            battles_per_hour = (battles_completed / (time.time() - start_time)) * 3600 if (time.time() - start_time) > 0 else 0
+            notifier.on_battle_complete(battles_completed, total_exp_gained, battles_per_hour)
 
         # ----------------------------------------------------
         # Read authoritative current level.
@@ -1735,6 +1750,15 @@ def train_until_level(
         status=status,
         subtitle="Train until level session summary",
     )
+
+    # Send completion notification
+    if notifier:
+        duration_seconds = time.time() - start_time
+        hours = int(duration_seconds // 3600)
+        minutes = int((duration_seconds % 3600) // 60)
+        seconds = int(duration_seconds % 60)
+        duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+        notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
 
     return {
         "battles": battles_completed,
