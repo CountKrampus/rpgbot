@@ -1,0 +1,62 @@
+# Discord Notification Integration Map
+
+Based on detailed code analysis of training.py, search.py, and mining.py
+
+CRITICAL: The notifier frameworks exist but are COMPLETELY DISCONNECTED
+
+Current: TrainingNotifier ─→ (nothing)
+         SearchingNotifier ─→ (nothing)
+         MiningNotifier ─→ (nothing)
+
+Required: TrainingNotifier ─→ training.py train_until_level()
+          SearchingNotifier ─→ search.py run_searches()
+          MiningNotifier ─→ mining.py miner_mode()
+
+TRAINING INTEGRATION
+  File: training.py
+  Function: train_until_level() (line 1376)
+  Key variables: battles_completed (line 1488), total_exp_gained (line 1489)
+  
+  Integration points:
+  1. Initialize notifier after line 1380
+  2. Call on_battle_complete() after line 1585 (after total_exp_gained update)
+  3. Call on_training_complete() before return (around line 1735)
+  4. Call on_training_error() in exception handler
+  5. Call on_training_cancelled() on Ctrl+C
+
+SEARCHING INTEGRATION
+  File: search.py
+  Function: run_searches() (line 2116) - NOT run_search_rotation()
+  Key variables: total_searches_completed (line 2988)
+  
+  Integration points:
+  1. Initialize notifier after line 2116
+  2. Call on_search_complete() after line 3147 (after search completion)
+  3. Call on_searching_complete() before return
+  4. Call on_searching_error() in exception handler
+  5. Call on_searching_cancelled() on Ctrl+C
+
+MINING INTEGRATION
+  File: mining.py
+  Function: miner_mode() (line 1305)
+  Key variables: stats (line 1455), click_mine() (line 1597)
+  
+  CRITICAL: Call notifier AFTER mine result parsing, not immediately after click_mine()
+  
+  Integration points:
+  1. Initialize notifier after line 1305
+  2. Call on_mine_complete() after stats updates (after result parsing)
+  3. Call on_mining_complete() before return
+  4. Call on_mining_error() in exception handler
+  5. Call on_mining_cancelled() on Ctrl+C
+
+STATUS
+  Framework: ✅ Complete
+  Settings UI: ✅ Complete
+  Training integration: ❌ Missing
+  Search integration: ❌ Missing
+  Mining integration: ❌ Missing
+  
+Estimated effort: 15 minutes total
+
+See REAL_INTEGRATION_MAP.md in outputs for detailed code snippets
