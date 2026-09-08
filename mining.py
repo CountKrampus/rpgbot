@@ -1677,11 +1677,6 @@ def miner_mode(
                 f"{stats['mines']}/{target_mines}"
             )
 
-        # Send Discord notification at configured intervals
-        if notifier:
-            mines_per_hour = (stats["mines"] / (time.time() - start_time)) * 3600 if (time.time() - start_time) > 0 else 0
-            notifier.on_mine_complete(stats["mines"], stats.get("ore_collected", 0), mines_per_hour)
-
         # ----------------------------------------------------
         # Wait for Eclipse's result.
         # ----------------------------------------------------
@@ -1752,6 +1747,11 @@ def miner_mode(
             "  ✓ Mining result processed."
         )
 
+        # Send Discord notification at configured intervals (after result is parsed)
+        if notifier:
+            mines_per_hour = (stats["mines"] / (time.time() - start_time)) * 3600 if (time.time() - start_time) > 0 else 0
+            notifier.on_mine_complete(stats["mines"], stats.get("ore_collected", 0), mines_per_hour)
+
         if cancel_after_result:
             break
 
@@ -1783,7 +1783,11 @@ def miner_mode(
         minutes = int((duration_seconds % 3600) // 60)
         seconds = int(duration_seconds % 60)
         duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-        notifier.on_mining_complete(stats["mines"], stats.get("ore_collected", 0), duration_str)
+        
+        if cancelled:
+            notifier.on_mining_cancelled(stats["mines"], stats.get("ore_collected", 0))
+        else:
+            notifier.on_mining_complete(stats["mines"], stats.get("ore_collected", 0), duration_str)
 
     print_mining_results(
         stats,

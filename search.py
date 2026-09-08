@@ -2341,14 +2341,18 @@ def run_searches(
         completed
     )
 
-    # Send completion notification
+    # Send completion notification (but not for cancellation)
     if notifier:
         duration_seconds = time.time() - started_at
         hours = int(duration_seconds // 3600)
         minutes = int((duration_seconds % 3600) // 60)
         seconds = int(duration_seconds % 60)
         duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-        notifier.on_searching_complete(completed, 0, duration_str)
+        
+        if cancel_after_current:
+            notifier.on_searching_cancelled(completed, 0)
+        else:
+            notifier.on_searching_complete(completed, 0, duration_str)
 
     return not cancel_after_current
 
@@ -2418,7 +2422,7 @@ def check_map_access(driver, map_data):
 # TARGET POKEMON HUNTING MODE
 # ============================================================
 
-def target_pokemon_mode(driver):
+def target_pokemon_mode(driver, account_name=None):
     """
     Hunt a specific Pokémon using eclipse_maps.db to look up
     which maps contain it.
@@ -3158,7 +3162,8 @@ def target_pokemon_mode(driver):
             map_searches,
             is_exclusive=is_exclusive,
             area=area,
-            target_pokemon=target_pokemon
+            target_pokemon=target_pokemon,
+            account_name=account_name
         )
 
         # ----------------------------------------------------
@@ -3741,7 +3746,8 @@ def search_mode(driver):
             map_name,
             searches,
             is_exclusive=is_exclusive,
-            area=area
+            area=area,
+            account_name=account_name
         ):
 
             print()
@@ -3790,7 +3796,8 @@ def _run_search_session(
     driver,
     map_name,
     is_exclusive,
-    area=None
+    area=None,
+    account_name=None
 ):
     """
     Shared search loop for a single already-selected map.
@@ -3944,7 +3951,7 @@ def _run_search_session(
         return
 
 
-def normal_maps_mode(driver):
+def normal_maps_mode(driver, account_name=None):
     """
     Search submenu -> Normal Maps.
 
@@ -4011,11 +4018,12 @@ def normal_maps_mode(driver):
     _run_search_session(
         driver,
         map_name,
-        is_exclusive=False
+        is_exclusive=False,
+        account_name=account_name
     )
 
 
-def exclusive_maps_mode(driver):
+def exclusive_maps_mode(driver, account_name=None):
     """
     Search submenu -> Exclusive Legendary Areas.
 
@@ -4101,5 +4109,6 @@ def exclusive_maps_mode(driver):
         driver,
         area["name"],
         is_exclusive=True,
-        area=area
+        area=area,
+        account_name=account_name
     )

@@ -315,13 +315,13 @@ def search_menu(driver, account=None):
             break
 
         if choice == "1":
-            normal_maps_mode(driver)
+            normal_maps_mode(driver, account_name=account)
         elif choice == "2":
-            exclusive_maps_mode(driver)
+            exclusive_maps_mode(driver, account_name=account)
         elif choice == "3":
             _search_pokemon(driver)
         elif choice == "4":
-            target_pokemon_mode(driver)
+            target_pokemon_mode(driver, account_name=account)
         elif choice == "5":
             _search_box(driver)
         elif choice == "6":

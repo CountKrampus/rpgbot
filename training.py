@@ -1752,13 +1752,18 @@ def train_until_level(
     )
 
     # Send completion notification
+    # Send completion notification (but not for cancellation)
     if notifier:
         duration_seconds = time.time() - start_time
         hours = int(duration_seconds // 3600)
         minutes = int((duration_seconds % 3600) // 60)
         seconds = int(duration_seconds % 60)
         duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-        notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
+        
+        if cancelled:
+            notifier.on_training_cancelled(battles_completed, total_exp_gained)
+        else:
+            notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
 
     return {
         "battles": battles_completed,
@@ -2058,14 +2063,18 @@ def train_mode(
         ),
     )
 
-    # Send completion notification
+    # Send completion notification (but not for cancellation)
     if notifier:
         duration_seconds = time.time() - started_at
         hours = int(duration_seconds // 3600)
         minutes = int((duration_seconds % 3600) // 60)
         seconds = int(duration_seconds % 60)
         duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-        notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
+        
+        if cancelled:
+            notifier.on_training_cancelled(battles_completed, total_exp_gained)
+        else:
+            notifier.on_training_complete(battles_completed, total_exp_gained, duration_str)
 
     return {
         "battles": battles_completed,
